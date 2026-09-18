@@ -4,6 +4,8 @@ import { parseClientMarks, parseGazette } from "@/load";
 import { sweep } from "@/sweep";
 import { toReportDTO, type ReportDTO } from "@/lib/dto";
 import { getDb } from "@/lib/db";
+import { importCartera, loadMarksFromDb, getCarteraInfo } from "@/lib/cartera";
+import type { ClientMark } from "@/types";
 
 export interface RunResult {
   ok: boolean;
@@ -13,31 +15,13 @@ export interface RunResult {
   elapsedMs?: number;
 }
 
-/** Parsea cartera + gaceta, corre el barrido y (si hay BD) guarda la corrida. */
-export async function runComparison(clientText: string, gazetteText: string): Promise<RunResult> {
-  const t0 = Date.now();
-  let clientRows: any, gazetteDoc: any;
-  try {
-    clientRows = JSON.parse(clientText);
-    gazetteDoc = JSON.parse(gazetteText);
-  } catch {
-    return { ok: false, error: "Alguno de los archivos no es JSON válido." };
-  }
-  if (!Array.isArray(clientRows)) {
-    return { ok: false, error: "La cartera del cliente debe ser un arreglo JSON (casos.json)." };
-  }
-  if (!gazetteDoc?.details) {
-    return { ok: false, error: "La gaceta no tiene 'details'. ¿Es el JSON correcto?" };
-  }
+// Barrido + guardado (compartido por ambos flujos)
+async function sweepAndSave(marks: ClientMark[], gazetteDoc: any, t0: number): Promise<RunResult> {
+  if (!gazetteDoc?.details) return { ok: false, error: "La gaceta no tiene 'details'. ¿Es el JSON correcto?" };
 
-  const marks = parseClientMarks(clientRows);
   const { meta, entries, skipped } = parseGazette(gazetteDoc);
   const { candidates } = sweep(entries, marks);
-  const dto = toReportDTO(candidates, meta, {
-    clientCount: marks.length,
-    gazetteCount: entries.length,
-    skipped,
-  });
+  const dto = toReportDTO(candidates, meta, { clientCount: marks.length, gazetteCount: entries.length, skipped });
 
   let runId: number | null = null;
   const db = getDb();
@@ -57,6 +41,54 @@ export async function runComparison(clientText: string, gazetteText: string): Pr
       console.error("[vsion] no se pudo guardar la corrida:", e);
     }
   }
-
   return { ok: true, dto, runId, elapsedMs: Date.now() - t0 };
+}
+
+/** Compara subiendo AMBOS archivos (cartera + gaceta). Funciona sin BD. */
+export async function runComparison(clientText: string, gazetteText: string): Promise<RunResult> {
+  const t0 = Date.now();
+  let clientRows: any, gazetteDoc: any;
+  try {
+    clientRows = JSON.parse(clientText);
+    gazetteDoc = JSON.parse(gazetteText);
+  } catch {
+    return { ok: false, error: "Alguno de los archivos no es JSON válido." };
+  }
+  if (!Array.isArray(clientRows)) return { ok: false, error: "La cartera debe ser un arreglo JSON (casos.json)." };
+  return sweepAndSave(parseClientMarks(clientRows), gazetteDoc, t0);
+}
+
+/** Compara usando la cartera ya importada en la BD; solo se sube la gaceta. */
+export async function runComparisonFromDb(gazetteText: string): Promise<RunResult> {
+  const t0 = Date.now();
+  let gazetteDoc: any;
+  try {
+    gazetteDoc = JSON.parse(gazetteText);
+  } catch {
+    return { ok: false, error: "La gaceta no es JSON válido." };
+  }
+  const marks = await loadMarksFromDb();
+  if (!marks.length) return { ok: false, error: "No hay cartera importada. Ve a Cartera e impórtala primero." };
+  return sweepAndSave(marks, gazetteDoc, t0);
+}
+
+/** Importa/reemplaza la cartera del cliente en la BD. */
+export async function importCarteraAction(clientText: string): Promise<{ ok: boolean; count?: number; error?: string }> {
+  let rows: any;
+  try {
+    rows = JSON.parse(clientText);
+  } catch {
+    return { ok: false, error: "El archivo no es JSON válido." };
+  }
+  if (!Array.isArray(rows)) return { ok: false, error: "La cartera debe ser un arreglo JSON (casos.json)." };
+  try {
+    const count = await importCartera(rows);
+    return { ok: true, count };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error al importar." };
+  }
+}
+
+export async function carteraInfoAction() {
+  return getCarteraInfo();
 }

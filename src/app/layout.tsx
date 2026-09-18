@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Search, History } from "lucide-react";
+import { Search, History, Database } from "lucide-react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -20,6 +20,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <nav className="flex items-center gap-4 text-sm text-[var(--mut)]">
               <Link href="/" className="hover:text-[var(--tx)]">Nueva comparación</Link>
+              <Link href="/cartera" className="flex items-center gap-1 hover:text-[var(--tx)]">
+                <Database size={14} /> Cartera
+              </Link>
               <Link href="/historial" className="flex items-center gap-1 hover:text-[var(--tx)]">
                 <History size={14} /> Historial
               </Link>
