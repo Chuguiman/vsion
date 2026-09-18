@@ -1,13 +1,27 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BrainCircuit, Loader2, Check, X } from "lucide-react";
+import { BrainCircuit, Loader2, Check, X, Download } from "lucide-react";
 import type { ReportDTO, PubDTO, CandDTO, Relation, AiVerdict } from "@/lib/dto";
 import { analyzeBatchAction, setReviewAction } from "../actions";
 import type { ReviewStatus } from "@/lib/reviews";
 
-type Filter = Relation | "all";
+type Filter = Relation | "all" | "ai_selected";
+type ReviewFilter = "pending" | ReviewStatus | "all";
+const REVIEW_COLORS: Record<ReviewFilter, { active: string; inactive: string }> = {
+  pending: { active: "border-violet-400 bg-violet-500/15 text-violet-300", inactive: "border-violet-500/30 text-violet-300 hover:bg-violet-500/10" },
+  approved: { active: "border-emerald-400 bg-emerald-500/15 text-emerald-300", inactive: "border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10" },
+  discarded: { active: "border-yellow-400 bg-yellow-500/15 text-yellow-300", inactive: "border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10" },
+  all: { active: "border-[var(--acc)] text-[var(--acc)]", inactive: "border-[var(--bd)] text-[var(--tx)]" },
+};
+
+function matchesFilter(c: CandDTO, filter: Filter): boolean {
+  if (filter === "ai_selected") {
+    return c.relation === "conflict" && (c.ai?.recommendation === "file_opposition" || c.ai?.recommendation === "monitor_closely");
+  }
+  return filter === "all" || c.relation === filter;
+}
 
 const REL_LABEL: Record<Relation, string> = { conflict: "Conflicto", firm: "Presentada por tu firma", own: "Tu marca (aviso)" };
 const REL_CLASS: Record<Relation, string> = {
@@ -68,12 +82,12 @@ function ReviewCell({ status, onSet }: { status?: ReviewStatus; onSet: (s: Revie
   const base = "inline-flex h-7 w-7 items-center justify-center rounded-md border transition";
   return (
     <div className="flex gap-1">
-      <button title="Aprobar" onClick={() => onSet(status === "approved" ? null : "approved")}
+      <button title={status === "approved" ? "Devolver a pendientes" : "Aprobar"} onClick={() => onSet(status === "approved" ? null : "approved")}
         className={`${base} ${status === "approved" ? "border-emerald-500 bg-emerald-500/20 text-emerald-300" : "border-[var(--bd)] text-[var(--mut)] hover:text-[var(--tx)]"}`}>
         <Check size={15} />
       </button>
-      <button title="Descartar" onClick={() => onSet(status === "discarded" ? null : "discarded")}
-        className={`${base} ${status === "discarded" ? "border-red-500 bg-red-500/20 text-red-300" : "border-[var(--bd)] text-[var(--mut)] hover:text-[var(--tx)]"}`}>
+      <button title={status === "discarded" ? "Devolver a pendientes" : "Descartar"} onClick={() => onSet(status === "discarded" ? null : "discarded")}
+        className={`${base} ${status === "discarded" ? "border-yellow-500 bg-yellow-500/20 text-yellow-300" : "border-[var(--bd)] text-[var(--mut)] hover:text-[var(--tx)]"}`}>
         <X size={15} />
       </button>
     </div>
@@ -108,7 +122,7 @@ function Row({ c, pub, reviewable, status, onReview }: {
 function Pub({ g, filter, reviewable, reviews, onReview }: {
   g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; onReview: (key: string, s: ReviewStatus | null) => void;
 }) {
-  const rows = g.candidates.filter((c) => filter === "all" || c.relation === filter);
+  const rows = g.candidates.filter((c) => matchesFilter(c, filter));
   if (!rows.length) return null;
   return (
     <section className="mb-4 overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
@@ -132,8 +146,8 @@ function Pub({ g, filter, reviewable, reviews, onReview }: {
             {reviewable && <th className="px-4 py-2 font-medium">Revisión</th>}
           </tr>
         </thead>
-        <tbody>{rows.map((c, i) => (
-          <Row key={i} c={c} pub={g} reviewable={reviewable} status={reviews[candKeyOf(g, c)]} onReview={onReview} />
+        <tbody>{rows.map((c) => (
+          <Row key={candKeyOf(g, c)} c={c} pub={g} reviewable={reviewable} status={reviews[candKeyOf(g, c)]} onReview={onReview} />
         ))}</tbody>
       </table>
     </section>
@@ -143,25 +157,50 @@ function Pub({ g, filter, reviewable, reviews, onReview }: {
 export default function Results({ dto, runId, reviews: initialReviews }: {
   dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>;
 }) {
-  const [filter, setFilter] = useState<Filter>("conflict");
+  const [selectedFilter, setFilter] = useState<Filter | null>(null);
   const [ai, setAi] = useState<{ running: boolean; analyzed: number; total: number; error?: string } | null>(null);
   const [reviews, setReviews] = useState<Record<string, ReviewStatus>>(initialReviews ?? {});
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("pending");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [savingCount, setSavingCount] = useState(0);
+  const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const savingReviews = useRef(new Set<string>());
   const router = useRouter();
   const { meta, stats, groups } = dto;
   const reviewable = !!runId;
 
   const analyzedCount = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai).length, 0);
+  const analysisComplete = stats.conflict > 0 && analyzedCount >= stats.conflict;
+  const filter = selectedFilter ?? (analysisComplete ? "ai_selected" : "conflict");
   const nApproved = Object.values(reviews).filter((s) => s === "approved").length;
   const nDiscarded = Object.values(reviews).filter((s) => s === "discarded").length;
 
-  function onReview(key: string, status: ReviewStatus | null) {
-    if (!runId) return;
+  async function onReview(key: string, status: ReviewStatus | null) {
+    if (!runId || savingReviews.current.has(key)) return;
+    savingReviews.current.add(key);
+    setSavingCount((n) => n + 1);
+    const previous = reviews[key];
+    setReviewError(null);
     setReviews((prev) => {
       const next = { ...prev };
       if (status === null) delete next[key]; else next[key] = status;
       return next;
     });
-    setReviewAction(runId, key, status).catch(() => {});
+    try {
+      const result = await setReviewAction(runId, key, status);
+      if (!result.ok) throw new Error(result.error || "No se pudo guardar la revisión.");
+    } catch {
+      setReviews((prev) => {
+        const next = { ...prev };
+        if (previous === undefined) delete next[key]; else next[key] = previous;
+        return next;
+      });
+      setReviewError("No se pudo guardar la revisión. Se restauró el estado anterior; vuelve a intentarlo.");
+    } finally {
+      savingReviews.current.delete(key);
+      setSavingCount((n) => n - 1);
+    }
   }
 
   async function analyze() {
@@ -172,7 +211,10 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
         const r = await analyzeBatchAction(runId, 15);
         if (!r.ok) { setAi({ running: false, analyzed: r.analyzed, total: r.total, error: r.error }); return; }
         setAi({ running: r.remaining > 0, analyzed: r.analyzed, total: r.total });
-        if (r.remaining <= 0) break;
+        if (r.remaining <= 0) {
+          setFilter(null);
+          break;
+        }
       }
       router.refresh();
     } catch (e) {
@@ -181,16 +223,41 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
   }
 
   const Btn = ({ id, label }: { id: Filter; label: string }) => (
-    <button onClick={() => setFilter(id)}
+    <button onClick={() => setFilter(id)} aria-pressed={filter === id}
       className={`rounded-lg border px-3 py-1.5 text-sm ${filter === id ? "border-[var(--acc)] text-[var(--acc)]" : "border-[var(--bd)] text-[var(--tx)]"} bg-[var(--bg2)]`}>
       {label}
     </button>
   );
 
-  const visible = groups.filter((g) => filter === "all" || g.candidates.some((c) => c.relation === filter));
-  const nOpp = groups.reduce((a, g) => a + g.candidates.filter((c) => c.ai?.recommendation === "file_opposition").length, 0);
-  const nMon = groups.reduce((a, g) => a + g.candidates.filter((c) => c.ai?.recommendation === "monitor_closely").length, 0);
+  const matchingGroups = groups.map((g) => ({ ...g, candidates: g.candidates.filter((c) => matchesFilter(c, filter)) }));
+  const reviewCounts = { pending: 0, approved: 0, discarded: 0, all: 0 };
+  for (const g of matchingGroups) for (const c of g.candidates) {
+    reviewCounts[reviews[candKeyOf(g, c)] ?? "pending"]++;
+    reviewCounts.all++;
+  }
+  const visible = matchingGroups.map((g) => ({
+    ...g,
+    candidates: g.candidates.filter((c) => !reviewable || reviewFilter === "all" || (reviews[candKeyOf(g, c)] ?? "pending") === reviewFilter),
+  })).filter((g) => g.candidates.length > 0);
+  const nOpp = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai?.recommendation === "file_opposition").length, 0);
+  const nMon = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai?.recommendation === "monitor_closely").length, 0);
   const showAiKpis = analyzedCount > 0;
+
+  async function exportApproved(format: "pdf" | "xlsx") {
+    if (reviewFilter !== "approved" || !visible.length || savingReviews.current.size || exporting) return;
+    setExporting(format);
+    setExportError(null);
+    try {
+      const { createApprovedExcel, createApprovedPdf, downloadExport } = await import("@/lib/review-export");
+      const blob = await (format === "pdf" ? createApprovedPdf : createApprovedExcel)(visible, meta);
+      const gazette = `${meta.country}${meta.number}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+      downloadExport(blob, `vsion-${gazette}-aprobadas.${format}`);
+    } catch {
+      setExportError("No se pudo generar el archivo. Vuelve a intentarlo.");
+    } finally {
+      setExporting(null);
+    }
+  }
 
   return (
     <div>
@@ -204,7 +271,7 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
           : <Kpi n={stats.clientCount} label="Marcas cliente" />}
       </div>
 
-      {runId && stats.conflict > 0 && (
+      {runId && stats.conflict > 0 && !analysisComplete && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-4 py-3">
           <BrainCircuit size={18} className="text-[var(--acc)]" />
           {ai?.running ? (
@@ -218,8 +285,7 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
           ) : (
             <>
               <span className="text-sm">
-                {analyzedCount >= stats.conflict && stats.conflict > 0 ? `IA completada: ${stats.conflict} conflictos analizados.`
-                  : analyzedCount > 0 ? `IA parcial: ${analyzedCount}/${stats.conflict}. Continuar análisis.`
+                {analyzedCount > 0 ? `IA parcial: ${analyzedCount}/${stats.conflict}. Continuar análisis.`
                   : `${stats.conflict} conflictos sin analizar. La IA los revisa como un abogado y prioriza.`}
               </span>
               <button onClick={analyze} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-3 py-1.5 text-sm font-medium text-black">
@@ -232,7 +298,8 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
       )}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <Btn id="conflict" label={`Conflictos (${stats.conflict})`} />
+        {showAiKpis && <Btn id="ai_selected" label={`Seleccionados por IA (${nOpp + nMon})`} />}
+        <Btn id="conflict" label={`Todos los conflictos (${stats.conflict})`} />
         <Btn id="firm" label={`Tu firma (${stats.firm})`} />
         <Btn id="own" label={`Tu marca (${stats.own})`} />
         <Btn id="all" label="Todas" />
@@ -241,8 +308,37 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
         </span>
       </div>
 
-      {visible.length ? visible.map((g, i) => (
-        <Pub key={i} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} />
+      {reviewable && (
+        <div className="mb-4 flex flex-wrap gap-2" aria-label="Estado de revisión">
+          {([
+            ["pending", "Pendientes"], ["approved", "Aprobadas"],
+            ["discarded", "Descartadas"], ["all", "Todas las revisiones"],
+          ] as const).map(([id, label]) => (
+            <button key={id} onClick={() => setReviewFilter(id)} aria-pressed={reviewFilter === id}
+              className={`rounded-lg border px-3 py-1.5 text-sm transition ${reviewFilter === id ? REVIEW_COLORS[id].active : REVIEW_COLORS[id].inactive}`}>
+              {label} ({reviewCounts[id]})
+            </button>
+          ))}
+        </div>
+      )}
+      {reviewError && <p role="alert" className="mb-4 text-sm text-red-300">{reviewError}</p>}
+      {reviewable && reviewFilter === "approved" && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="mr-auto text-sm text-[var(--mut)]">Exportar aprobadas de esta vista ({reviewCounts.approved})</span>
+          {(["pdf", "xlsx"] as const).map((format) => (
+            <button key={format} onClick={() => exportApproved(format)}
+              disabled={!visible.length || savingCount > 0 || exporting !== null}
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40">
+              {exporting === format ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              Exportar {format === "pdf" ? "PDF" : "Excel"}
+            </button>
+          ))}
+          {exportError && <p role="alert" className="w-full text-sm text-red-300">{exportError}</p>}
+        </div>
+      )}
+
+      {visible.length ? visible.map((g) => (
+        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} />
       )) : <p className="text-[var(--mut)]">Sin resultados para este filtro.</p>}
     </div>
   );
