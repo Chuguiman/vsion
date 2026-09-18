@@ -7,7 +7,8 @@ export interface ClientMark {
   denom: string;          // caso_titulo
   classes: number[];      // clases Niza
   pys: string;            // productos y servicios (texto)
-  holder: string;         // titular
+  holder: string;         // titular (nombre)
+  attorney: string;       // apoderado (nombre)
   status: string;         // estado_del_caso
   keys: PhoneticKeys;
 }
@@ -17,7 +18,8 @@ export interface GazetteEntry {
   denom: string;          // word
   classes: number[];      // clases
   pys: string;            // pys concatenado
-  applicant: string;
+  applicant: string;      // solicitante
+  representant: string;   // representante / apoderado
   applicationNumber: string;
   markType: string;
   status: string;
@@ -41,6 +43,8 @@ export interface Candidate {
   breakdown: Record<string, number>;
   matchingClasses: number[];
   relatedClasses: number[];
+  sameOwner: boolean;          // mismo titular → aviso de publicación, no oposición
+  sameAttorney: boolean;       // mismo apoderado (corrobora)
   // Rellenado por la etapa IA:
   ai?: {
     recommendation: "file_opposition" | "monitor_closely" | "no_action";

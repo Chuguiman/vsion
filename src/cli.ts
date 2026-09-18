@@ -69,6 +69,14 @@ async function main() {
   console.log(`  Pares evaluados: ${stats.pairsScored.toLocaleString()} en ${stats.elapsedMs} ms`);
   console.log(`  Candidatos (score >= ${threshold}): ${candidates.length}`);
 
+  // Mismo titular = tu propia marca publicándose. No es oposición: aviso de
+  // publicación. No se analiza con IA (se separa y no gasta tokens).
+  const ownPublications = candidates.filter((c) => c.sameOwner);
+  const forConfusion = candidates.filter((c) => !c.sameOwner);
+  if (ownPublications.length) {
+    console.log(`  Aviso de publicación (mismo titular, no se analizan): ${ownPublications.length}`);
+  }
+
   // ── Etapa 2: IA ─────────────────────────────────────────────────────
   let aiRan = false;
   if (useAi) {
@@ -77,8 +85,8 @@ async function main() {
       console.warn("\n[aviso] Sin OPENROUTER_API_KEY — se omite la IA. Copia .env.example a .env y añade la key.");
     } else {
       const toReview = aiAll
-        ? candidates
-        : candidates.filter((c) => c.matchingClasses.length || c.relatedClasses.length || c.score >= 85);
+        ? forConfusion
+        : forConfusion.filter((c) => c.matchingClasses.length || c.relatedClasses.length || c.score >= 85);
       const model = arg("model") ?? process.env.AI_MODEL ?? "deepseek/deepseek-chat";
       const concurrency = Number(arg("concurrency") ?? process.env.AI_CONCURRENCY ?? 8);
       const cachePath = join(outDir, `${meta.country}${meta.number}-ai-cache.json`);
@@ -107,7 +115,7 @@ async function main() {
   const opp = candidates.filter((c) => c.ai?.recommendation === "file_opposition").length;
   const mon = candidates.filter((c) => c.ai?.recommendation === "monitor_closely").length;
   console.log("\nListo.");
-  if (aiRan) console.log(`  Oponerse: ${opp} · Vigilar: ${mon}`);
+  if (aiRan) console.log(`  Oponerse: ${opp} · Vigilar: ${mon} · Aviso publicación: ${ownPublications.length}`);
   console.log(`  HTML: ${htmlPath}`);
   console.log(`  XLSX: ${xlsxPath}`);
 }

@@ -25,7 +25,8 @@ export function loadClientMarks(path: string): ClientMark[] {
       denom,
       classes: parseClasses(r.descripcion_de_productos_y_servicios),
       pys: String(r.productos_y_servicios_descripcion ?? "").trim(),
-      holder: String(r.titular ?? "").trim(),
+      holder: String(r.titular ?? "").split(",")[0].trim(),
+      attorney: String(r.apoderado ?? "").split(",")[0].trim(),
       status: String(r.estado_del_caso ?? "").trim(),
       keys: computeKeys(denom),
     });
@@ -56,11 +57,14 @@ export function loadGazette(path: string): { meta: GazetteMeta; entries: Gazette
       : "";
     const applicant = Array.isArray(d.applicants) && d.applicants[0]
       ? String(d.applicants[0].aplicantName ?? "").trim() : "";
+    const representant = Array.isArray(d.representants) && d.representants[0]
+      ? String(d.representants[0].representant_name ?? "").trim() : "";
     entries.push({
       denom,
       classes: parseClasses(d.clases),
       pys,
       applicant,
+      representant,
       applicationNumber: String(d.applicationNumber ?? "").trim(),
       markType: String(d.markType ?? "").trim(),
       status: String(d.markStatus ?? "").trim(),

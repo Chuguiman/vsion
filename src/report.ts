@@ -7,8 +7,15 @@ const REC_LABEL: Record<string, string> = {
   file_opposition: "Oponerse",
   monitor_closely: "Vigilar",
   no_action: "Sin acción",
+  own: "Tu marca (aviso)",
 };
-const REC_RANK: Record<string, number> = { file_opposition: 0, monitor_closely: 1, no_action: 2 };
+const REC_RANK: Record<string, number> = { file_opposition: 0, monitor_closely: 1, own: 2, no_action: 3 };
+
+/** Categoría de una fila: mismo titular → aviso; si no, el veredicto IA */
+function rowKind(c: Candidate): string {
+  if (c.sameOwner) return "own";
+  return c.ai?.recommendation ?? "no_action";
+}
 
 function esc(s: string): string {
   return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
@@ -41,29 +48,36 @@ function groupByPublication(cands: Candidate[]): Group[] {
     g.cands.push(c);
   }
   for (const g of map.values()) {
-    g.cands.sort((a, b) => (REC_RANK[a.ai?.recommendation ?? "no_action"] - REC_RANK[b.ai?.recommendation ?? "no_action"]) || b.score - a.score);
-    g.topRank = Math.min(...g.cands.map((c) => REC_RANK[c.ai?.recommendation ?? "no_action"]));
+    g.cands.sort((a, b) => (REC_RANK[rowKind(a)] - REC_RANK[rowKind(b)]) || b.score - a.score);
+    g.topRank = Math.min(...g.cands.map((c) => REC_RANK[rowKind(c)]));
   }
   return [...map.values()].sort((a, b) => a.topRank - b.topRank || b.cands[0].score - a.cands[0].score);
 }
 
-function badge(rec: string): string {
-  return `<span class="badge ${rec}">${REC_LABEL[rec] ?? rec}</span>`;
+function badge(kind: string): string {
+  return `<span class="badge ${kind}">${REC_LABEL[kind] ?? kind}</span>`;
 }
 
 function candRow(c: Candidate): string {
-  const rec = c.ai?.recommendation ?? "no_action";
+  const kind = rowKind(c);
   const classes = [
     ...c.matchingClasses.map((n) => `<span class="cls match">${n}</span>`),
     ...c.relatedClasses.map((n) => `<span class="cls rel">${n}</span>`),
   ].join("") || '<span class="cls none">—</span>';
+  const holder = c.client.holder ? `<div class="sub owner">Titular: ${esc(c.client.holder)}</div>` : "";
+  const verdict = kind === "own"
+    ? `${badge("own")}${c.sameAttorney ? '<div class="prob">mismo apoderado</div>' : ""}`
+    : `${badge(kind)}${c.ai ? `<div class="prob">${c.ai.success_probability}%</div>` : ""}`;
+  const analysis = kind === "own"
+    ? "Solicitante = titular de tu marca. Es tu propia solicitud publicándose; no procede oposición, solo aviso."
+    : `${esc(c.ai?.summary || "")}${c.ai?.reasoning ? `<details><summary>razonamiento</summary><p>${esc(c.ai.reasoning)}</p></details>` : ""}`;
   return `
-  <tr class="cand" data-rec="${rec}">
+  <tr class="cand" data-rec="${kind}">
     <td class="score"><div class="bar"><i style="width:${c.score}%"></i></div><span>${c.score}</span></td>
-    <td class="denom">${esc(c.client.denom)}<div class="sub">${esc(c.client.code)} · ${esc(c.client.status)}</div></td>
+    <td class="denom">${esc(c.client.denom)}<div class="sub">${esc(c.client.code)} · ${esc(c.client.status)}</div>${holder}</td>
     <td class="cls-col">${classes}</td>
-    <td>${badge(rec)}${c.ai ? `<div class="prob">${c.ai.success_probability}%</div>` : ""}</td>
-    <td class="reason">${esc(c.ai?.summary || "")}${c.ai?.reasoning ? `<details><summary>razonamiento</summary><p>${esc(c.ai.reasoning)}</p></details>` : ""}</td>
+    <td>${verdict}</td>
+    <td class="reason">${analysis}</td>
   </tr>`;
 }
 
@@ -76,11 +90,11 @@ function groupBlock(g: Group): string {
         <span>${esc(g.applicationNumber)}</span>
         <span>${esc(g.markType)}</span>
         <span>Clases: ${g.classes.join(", ") || "—"}</span>
-        <span>${esc(g.applicant)}</span>
+        <span>Solicitante: ${esc(g.applicant) || "—"}</span>
       </div>
     </header>
     <table>
-      <thead><tr><th>Score</th><th>Marca del cliente</th><th>Clases</th><th>Veredicto IA</th><th>Análisis</th></tr></thead>
+      <thead><tr><th>Score</th><th>Marca del cliente</th><th>Clases</th><th>Veredicto</th><th>Análisis</th></tr></thead>
       <tbody>${g.cands.map(candRow).join("")}</tbody>
     </table>
   </section>`;
@@ -88,8 +102,9 @@ function groupBlock(g: Group): string {
 
 export function buildHtml(cands: Candidate[], meta: GazetteMeta, aiRan: boolean): string {
   const groups = groupByPublication(cands);
-  const nOpp = cands.filter((c) => c.ai?.recommendation === "file_opposition").length;
-  const nMon = cands.filter((c) => c.ai?.recommendation === "monitor_closely").length;
+  const nOpp = cands.filter((c) => !c.sameOwner && c.ai?.recommendation === "file_opposition").length;
+  const nMon = cands.filter((c) => !c.sameOwner && c.ai?.recommendation === "monitor_closely").length;
+  const nOwn = cands.filter((c) => c.sameOwner).length;
   const pubsWithRisk = groups.filter((g) => g.topRank < 2).length;
 
   return `<!doctype html><html lang="es"><head><meta charset="utf-8">
@@ -107,7 +122,7 @@ body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 ui-sans-serif,s
 .kpi{background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:10px 14px;min-width:96px}
 .kpi b{display:block;font-size:22px}
 .kpi span{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
-.kpi.opp b{color:var(--red)} .kpi.mon b{color:var(--amb)}
+.kpi.opp b{color:var(--red)} .kpi.mon b{color:var(--amb)} .kpi.own b{color:#93c5fd}
 .controls{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
 .controls button{background:var(--bg2);border:1px solid var(--bd);color:var(--tx);padding:7px 12px;border-radius:8px;cursor:pointer;font-size:13px}
 .controls button.active{border-color:var(--acc);color:var(--acc)}
@@ -125,6 +140,7 @@ tr:last-child td{border-bottom:none}
 .score .bar i{display:block;height:100%;background:var(--acc)}
 .denom{font-weight:600}
 .denom .sub{font-weight:400;color:var(--mut);font-size:12px;font-family:ui-monospace,monospace}
+.denom .sub.owner{font-family:inherit;color:#93c5fd}
 .cls{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;padding:1px 6px;border-radius:5px;margin:1px;border:1px solid var(--bd)}
 .cls.match{background:rgba(16,185,129,.15);border-color:var(--acc);color:var(--acc)}
 .cls.rel{background:rgba(245,158,11,.12);border-color:var(--amb);color:var(--amb)}
@@ -133,6 +149,7 @@ tr:last-child td{border-bottom:none}
 .badge.file_opposition{background:rgba(239,68,68,.15);color:#fca5a5}
 .badge.monitor_closely{background:rgba(245,158,11,.15);color:#fcd34d}
 .badge.no_action{background:var(--bd);color:var(--mut)}
+.badge.own{background:rgba(59,130,246,.15);color:#93c5fd}
 .prob{font-size:11px;color:var(--mut);margin-top:3px}
 .reason{max-width:360px;color:var(--tx)}
 .reason details{margin-top:6px} .reason summary{cursor:pointer;color:var(--acc);font-size:12px}
@@ -156,13 +173,14 @@ tr:last-child td{border-bottom:none}
     <div class="kpis">
       <div class="kpi opp"><b>${nOpp}</b><span>Oponerse</span></div>
       <div class="kpi mon"><b>${nMon}</b><span>Vigilar</span></div>
-      <div class="kpi"><b>${pubsWithRisk}</b><span>Publicaciones en riesgo</span></div>
+      <div class="kpi own"><b>${nOwn}</b><span>Aviso publicación</span></div>
       <div class="kpi"><b>${cands.length}</b><span>Coincidencias</span></div>
     </div>
   </div>
 
   <div class="controls">
     ${aiRan ? '<button data-filter="risk" class="active">En riesgo</button>' : ""}
+    ${nOwn ? '<button data-filter="own">Aviso publicación</button>' : ""}
     <button data-filter="all"${aiRan ? "" : ' class="active"'}>Todas</button>
     <div class="spacer"></div>
     <button onclick="window.print()">Imprimir / PDF</button>
@@ -175,13 +193,20 @@ tr:last-child td{border-bottom:none}
 <script>
   const AI_RAN=${aiRan ? "true" : "false"};
   const btns=[...document.querySelectorAll('.controls button[data-filter]')];
+  function rowVisible(kind,mode){
+    if(mode==='all') return true;
+    if(mode==='risk') return kind==='file_opposition'||kind==='monitor_closely';
+    if(mode==='own')  return kind==='own';
+    return true;
+  }
   function apply(mode){
-    document.querySelectorAll('.pub').forEach(p=>{
-      const risk=Number(p.dataset.toprank)<2;
-      p.style.display=(mode==='all'||risk)?'':'none';
-    });
     document.querySelectorAll('tr.cand').forEach(r=>{
-      r.style.display=(mode==='all'||r.dataset.rec!=='no_action')?'':'none';
+      r.style.display=rowVisible(r.dataset.rec,mode)?'':'none';
+    });
+    // ocultar publicaciones sin filas visibles
+    document.querySelectorAll('.pub').forEach(p=>{
+      const any=[...p.querySelectorAll('tr.cand')].some(r=>r.style.display!=='none');
+      p.style.display=any?'':'none';
     });
     btns.forEach(b=>b.classList.toggle('active',b.dataset.filter===mode));
   }

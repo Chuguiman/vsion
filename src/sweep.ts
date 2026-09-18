@@ -4,6 +4,7 @@
  */
 import { jaroWinkler, levenshteinRatio, diceCoefficient, containment } from "./similarity.js";
 import { classOverlap } from "./classes.js";
+import { sameEntity } from "./owner.js";
 import type { ClientMark, GazetteEntry, Candidate } from "./types.js";
 
 export interface SweepOptions {
@@ -95,7 +96,9 @@ export function sweep(gazette: GazetteEntry[], marks: ClientMark[], opts: SweepO
       const { score, breakdown } = scorePair(g, c);
       if (score < opts.threshold) continue;
       const { matching, related } = classOverlap(g.classes, c.classes);
-      scored.push({ gazette: g, client: c, score, breakdown, matchingClasses: matching, relatedClasses: related });
+      const sameOwner = sameEntity(g.applicant, c.holder);
+      const sameAttorney = sameEntity(g.representant, c.attorney);
+      scored.push({ gazette: g, client: c, score, breakdown, matchingClasses: matching, relatedClasses: related, sameOwner, sameAttorney });
     }
 
     scored.sort((a, b) => b.score - a.score);
