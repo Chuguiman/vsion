@@ -1,7 +1,35 @@
 # vsion
 
-Comparador de marcas standalone. Barre una gaceta contra la cartera de marcas del
-cliente en tres etapas, sin depender de PHP ni de base de datos:
+Comparador de marcas. App web (Next.js) **y** CLI. Barre una gaceta contra la
+cartera del cliente sin depender de PHP.
+
+## App web (Fase 1)
+
+```bash
+pnpm install
+pnpm dev            # http://localhost:3000
+```
+
+- `/` — sube cartera (casos.json) + gaceta (CO####.json), corre el barrido y muestra
+  el reporte web (filtros: Con conflicto / Aviso publicación / Todas; titular visible).
+- `/historial` — corridas guardadas (requiere `DATABASE_URL`).
+- Sin `DATABASE_URL` la app funciona igual pero no guarda historial.
+
+### Deploy (Vercel + Supabase)
+
+1. Crear proyecto Supabase → ejecutar `src/lib/schema.sql` en el SQL editor.
+2. Copiar el connection string a `DATABASE_URL` (con `?sslmode=require`).
+3. `git push` → importar el repo en Vercel → setear variables (`DATABASE_URL`,
+   y en Fase 2 `OPENROUTER_API_KEY`).
+4. Nota: la cartera pesa ~13MB; en Vercel el body de una petición se limita a
+   ~4.5MB. En producción la subida de la cartera se hará vía Supabase Storage
+   (pendiente) o importándola una sola vez. El barrido y el historial ya están.
+
+---
+
+## Motor / CLI
+
+Tres etapas, todo en Node/TS, sin BD:
 
 1. **Barrido fonético/textual** (Node puro, en memoria, <1 s) — reduce millones de
    pares a unos cientos de candidatos mediante índice invertido de trigramas + soundex.

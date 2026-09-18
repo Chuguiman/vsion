@@ -1,7 +1,7 @@
 /**
  * Reporte HTML autocontenido. Imprimible a PDF (botón / Ctrl+P).
  */
-import type { Candidate, GazetteMeta } from "./types.js";
+import type { Candidate, GazetteMeta } from "./types";
 
 const REC_LABEL: Record<string, string> = {
   file_opposition: "Oponerse",

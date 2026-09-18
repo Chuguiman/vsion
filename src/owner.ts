@@ -8,7 +8,7 @@
  * o contención multi-palabra. NO se usa similitud difusa: un falso positivo
  * ocultaría una oposición real (p.ej. FIBRATECH vs VIBRATECH son distintos).
  */
-import { normalize } from "./phonetics.js";
+import { normalize } from "./phonetics";
 
 // Formas jurídicas y conectores a eliminar antes de comparar.
 const LEGAL = new Set([

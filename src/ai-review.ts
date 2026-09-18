@@ -4,7 +4,7 @@
  * Solo procesa los candidatos que sobrevivieron al barrido.
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import type { Candidate } from "./types.js";
+import type { Candidate } from "./types";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
 

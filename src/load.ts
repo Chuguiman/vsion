@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
-import { computeKeys } from "./phonetics.js";
-import type { ClientMark, GazetteEntry, GazetteMeta } from "./types.js";
+import { computeKeys } from "./phonetics";
+import type { ClientMark, GazetteEntry, GazetteMeta } from "./types";
 
 function parseClasses(raw: unknown): number[] {
   if (raw == null) return [];
@@ -12,9 +12,8 @@ function parseClasses(raw: unknown): number[] {
   return [...out].sort((a, b) => a - b);
 }
 
-/** casos.json → marcas del cliente. Descarta títulos vacíos. */
-export function loadClientMarks(path: string): ClientMark[] {
-  const rows = JSON.parse(readFileSync(path, "utf8")) as any[];
+/** Filas de casos.json (ya parseadas) → marcas del cliente. */
+export function parseClientMarks(rows: any[]): ClientMark[] {
   const marks: ClientMark[] = [];
   for (const r of rows) {
     const denom = String(r.caso_titulo ?? "").trim();
@@ -34,9 +33,13 @@ export function loadClientMarks(path: string): ClientMark[] {
   return marks;
 }
 
-/** CO####.json → { meta, entries }. Descarta words vacíos (figurativas/3D). */
-export function loadGazette(path: string): { meta: GazetteMeta; entries: GazetteEntry[]; skipped: number } {
-  const doc = JSON.parse(readFileSync(path, "utf8"));
+/** casos.json → marcas del cliente. Descarta títulos vacíos. */
+export function loadClientMarks(path: string): ClientMark[] {
+  return parseClientMarks(JSON.parse(readFileSync(path, "utf8")) as any[]);
+}
+
+/** Documento de gaceta (ya parseado) → { meta, entries }. */
+export function parseGazette(doc: any): { meta: GazetteMeta; entries: GazetteEntry[]; skipped: number } {
   const pub = Array.isArray(doc.publication) ? doc.publication[0] : doc.publication ?? {};
   const meta: GazetteMeta = {
     country: String(pub.codeCountry ?? ""),
@@ -68,8 +71,14 @@ export function loadGazette(path: string): { meta: GazetteMeta; entries: Gazette
       applicationNumber: String(d.applicationNumber ?? "").trim(),
       markType: String(d.markType ?? "").trim(),
       status: String(d.markStatus ?? "").trim(),
+      image: String(d.image ?? "").trim(),
       keys: computeKeys(denom),
     });
   }
   return { meta, entries, skipped };
+}
+
+/** CO####.json → { meta, entries }. Descarta words vacíos (figurativas/3D). */
+export function loadGazette(path: string): { meta: GazetteMeta; entries: GazetteEntry[]; skipped: number } {
+  return parseGazette(JSON.parse(readFileSync(path, "utf8")));
 }

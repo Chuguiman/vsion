@@ -1,4 +1,4 @@
-import type { PhoneticKeys } from "./phonetics.js";
+import type { PhoneticKeys } from "./phonetics";
 
 /** Marca del cliente (casos.json) — el derecho que se defiende */
 export interface ClientMark {
@@ -23,6 +23,7 @@ export interface GazetteEntry {
   applicationNumber: string;
   markType: string;
   status: string;
+  image: string;          // id de imagen SIC (p.ej. "0900000282554b53")
   keys: PhoneticKeys;
 }
 

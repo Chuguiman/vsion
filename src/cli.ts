@@ -14,11 +14,11 @@
  */
 import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
-import { loadClientMarks, loadGazette } from "./load.js";
-import { sweep, DEFAULT_SWEEP } from "./sweep.js";
-import { reviewCandidates } from "./ai-review.js";
-import { buildHtml } from "./report.js";
-import { writeXlsx } from "./xls.js";
+import { loadClientMarks, loadGazette } from "./load";
+import { sweep, DEFAULT_SWEEP } from "./sweep";
+import { reviewCandidates } from "./ai-review";
+import { buildHtml } from "./report";
+import { writeXlsx } from "./xls";
 import { writeFileSync } from "node:fs";
 
 // ── .env mínimo (sin dependencia) ─────────────────────────────────────

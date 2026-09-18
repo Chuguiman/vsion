@@ -2,10 +2,10 @@
  * Etapa 1 — Barrido fonético/textual rapidísimo, en memoria, sin IA.
  * Índice invertido por trigramas + soundex para no comparar N×M completo.
  */
-import { jaroWinkler, levenshteinRatio, diceCoefficient, containment } from "./similarity.js";
-import { classOverlap } from "./classes.js";
-import { sameEntity } from "./owner.js";
-import type { ClientMark, GazetteEntry, Candidate } from "./types.js";
+import { jaroWinkler, levenshteinRatio, diceCoefficient, containment } from "./similarity";
+import { classOverlap } from "./classes";
+import { sameEntity } from "./owner";
+import type { ClientMark, GazetteEntry, Candidate } from "./types";
 
 export interface SweepOptions {
   threshold: number;      // score mínimo para conservar (0..100)

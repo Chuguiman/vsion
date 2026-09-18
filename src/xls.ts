@@ -2,7 +2,7 @@
  * Export a XLSX (SheetJS). Una fila por candidato.
  */
 import * as XLSX from "xlsx";
-import type { Candidate, GazetteMeta } from "./types.js";
+import type { Candidate, GazetteMeta } from "./types";
 
 const REC_LABEL: Record<string, string> = {
   file_opposition: "Oponerse",
