@@ -28,6 +28,7 @@ interface Group {
   denom: string;
   applicationNumber: string;
   applicant: string;
+  representant: string;
   markType: string;
   classes: number[];
   cands: Candidate[];
@@ -42,7 +43,7 @@ function groupByPublication(cands: Candidate[]): Group[] {
     if (!g) {
       g = {
         key, denom: c.gazette.denom, applicationNumber: c.gazette.applicationNumber,
-        applicant: c.gazette.applicant, markType: c.gazette.markType,
+        applicant: c.gazette.applicant, representant: c.gazette.representant, markType: c.gazette.markType,
         classes: c.gazette.classes, cands: [], topRank: 3,
       };
       map.set(key, g);
@@ -60,12 +61,22 @@ function badge(kind: string): string {
   return `<span class="badge ${kind}">${REC_LABEL[kind] ?? kind}</span>`;
 }
 
+function scoreColor(s: number): string {
+  const t = Math.max(0, Math.min(1, (s - 55) / 45));
+  return `hsl(${210 - 210 * t}, 78%, 58%)`;
+}
+
 function candRow(c: Candidate): string {
   const kind = rowKind(c);
-  const classes = [
-    ...c.matchingClasses.map((n) => `<span class="cls match">${n}</span>`),
-    ...c.relatedClasses.map((n) => `<span class="cls rel">${n}</span>`),
-  ].join("") || '<span class="cls none">—</span>';
+  const matchSet = new Set(c.matchingClasses);
+  const relSet = new Set(c.relatedClasses);
+  const classes = c.client.classes.length
+    ? c.client.classes.map((n) => {
+        const cl = matchSet.has(n) ? "match" : relSet.has(n) ? "rel" : "other";
+        return `<span class="cls ${cl}">${n}</span>`;
+      }).join("")
+    : '<span class="cls none">—</span>';
+  const col = scoreColor(c.score);
   const holder = c.client.holder ? `<div class="sub owner">Titular: ${esc(c.client.holder)}</div>` : "";
   const verdict = kind === "own" || kind === "firm"
     ? badge(kind)
@@ -77,7 +88,7 @@ function candRow(c: Candidate): string {
     : `${esc(c.ai?.summary || "")}${c.ai?.reasoning ? `<details><summary>razonamiento</summary><p>${esc(c.ai.reasoning)}</p></details>` : ""}`;
   return `
   <tr class="cand" data-rec="${kind}">
-    <td class="score"><div class="bar"><i style="width:${c.score}%"></i></div><span>${c.score}</span></td>
+    <td class="score"><div class="bar"><i style="width:${c.score}%;background:${col}"></i></div><span style="color:${col};font-weight:600">${c.score}</span></td>
     <td class="denom">${esc(c.client.denom)}<div class="sub">${esc(c.client.code)} · ${esc(c.client.status)}</div>${holder}</td>
     <td class="cls-col">${classes}</td>
     <td>${verdict}</td>
@@ -95,6 +106,7 @@ function groupBlock(g: Group): string {
         <span>${esc(g.markType)}</span>
         <span>Clases: ${g.classes.join(", ") || "—"}</span>
         <span>Solicitante: ${esc(g.applicant) || "—"}</span>
+        ${g.representant ? `<span>Apoderado gaceta: <span class="apo">${esc(g.representant)}</span></span>` : ""}
       </div>
     </header>
     <table>
@@ -148,7 +160,9 @@ tr:last-child td{border-bottom:none}
 .cls{display:inline-block;font-family:ui-monospace,monospace;font-size:11px;padding:1px 6px;border-radius:5px;margin:1px;border:1px solid var(--bd)}
 .cls.match{background:rgba(16,185,129,.15);border-color:var(--acc);color:var(--acc)}
 .cls.rel{background:rgba(245,158,11,.12);border-color:var(--amb);color:var(--amb)}
+.cls.other{color:var(--mut)}
 .cls.none{color:var(--mut)}
+.meta .apo{color:#5eead4;font-weight:500}
 .badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px}
 .badge.file_opposition{background:rgba(239,68,68,.15);color:#fca5a5}
 .badge.monitor_closely{background:rgba(245,158,11,.15);color:#fcd34d}

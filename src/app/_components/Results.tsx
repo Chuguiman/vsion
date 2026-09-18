@@ -16,35 +16,48 @@ const REL_CLASS: Record<Relation, string> = {
   own: "bg-blue-500/15 text-blue-300",
 };
 
-function ClassBadges({ match, related }: { match: number[]; related: number[] }) {
-  if (!match.length && !related.length) return <span className="text-[var(--mut)]">—</span>;
+// Heatmap del score: 100 = rojo caliente → azul frío en los bajos.
+function scoreColor(s: number): string {
+  const t = Math.max(0, Math.min(1, (s - 55) / 45)); // 55→0 (frío), 100→1 (caliente)
+  const hue = 210 - 210 * t; // 210 azul → 0 rojo
+  return `hsl(${hue}, 78%, 58%)`;
+}
+
+// Muestra TODAS las clases del cliente; verde = en común, ámbar = relacionada, gris = otra.
+function ClassBadges({ clientClasses, match, related }: { clientClasses: number[]; match: number[]; related: number[] }) {
+  if (!clientClasses.length) return <span className="text-[var(--mut)]">—</span>;
+  const matchSet = new Set(match);
+  const relSet = new Set(related);
   return (
     <span className="inline-flex flex-wrap gap-1">
-      {match.map((n) => (
-        <span key={"m" + n} className="rounded border border-[var(--acc)] bg-emerald-500/15 px-1.5 font-mono text-[11px] text-[var(--acc)]">{n}</span>
-      ))}
-      {related.map((n) => (
-        <span key={"r" + n} className="rounded border border-amber-500 bg-amber-500/10 px-1.5 font-mono text-[11px] text-amber-400">{n}</span>
-      ))}
+      {clientClasses.map((n) => {
+        const cls = matchSet.has(n)
+          ? "border-[var(--acc)] bg-emerald-500/15 text-[var(--acc)]"
+          : relSet.has(n)
+          ? "border-amber-500 bg-amber-500/10 text-amber-400"
+          : "border-[var(--bd)] text-[var(--mut)]";
+        return <span key={n} className={`rounded border px-1.5 font-mono text-[11px] ${cls}`}>{n}</span>;
+      })}
     </span>
   );
 }
 
 function Row({ c }: { c: CandDTO }) {
+  const col = scoreColor(c.score);
   return (
     <tr className="border-b border-[var(--bd)] last:border-0">
       <td className="whitespace-nowrap px-4 py-2.5">
         <span className="mr-2 inline-block h-1.5 w-12 overflow-hidden rounded bg-[var(--bd)] align-middle">
-          <span className="block h-full bg-[var(--acc)]" style={{ width: `${c.score}%` }} />
+          <span className="block h-full" style={{ width: `${c.score}%`, background: col }} />
         </span>
-        <span className="font-mono text-sm">{c.score}</span>
+        <span className="font-mono text-sm font-semibold" style={{ color: col }}>{c.score}</span>
       </td>
       <td className="px-4 py-2.5">
         <div className="font-semibold">{c.clientDenom}</div>
         <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
         {c.clientHolder && <div className="text-xs text-blue-300">Titular: {c.clientHolder}</div>}
       </td>
-      <td className="px-4 py-2.5"><ClassBadges match={c.matchingClasses} related={c.relatedClasses} /></td>
+      <td className="px-4 py-2.5"><ClassBadges clientClasses={c.clientClasses} match={c.matchingClasses} related={c.relatedClasses} /></td>
       <td className="px-4 py-2.5">
         <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${REL_CLASS[c.relation]}`}>
           {REL_LABEL[c.relation]}
@@ -66,7 +79,7 @@ function Pub({ g, filter }: { g: PubDTO; filter: Filter }) {
           <span>{g.markType}</span>
           <span>Clases: {g.classes.join(", ") || "—"}</span>
           <span>Solicitante: {g.applicant || "—"}</span>
-          {g.representant && <span>Apoderado gaceta: {g.representant}</span>}
+          {g.representant && <span>Apoderado gaceta: <span className="font-medium text-teal-300">{g.representant}</span></span>}
         </div>
       </header>
       <table className="w-full text-left">
@@ -74,7 +87,7 @@ function Pub({ g, filter }: { g: PubDTO; filter: Filter }) {
           <tr className="text-[11px] uppercase tracking-wide text-[var(--mut)]">
             <th className="px-4 py-2 font-medium">Score</th>
             <th className="px-4 py-2 font-medium">Marca del cliente</th>
-            <th className="px-4 py-2 font-medium">Clases</th>
+            <th className="px-4 py-2 font-medium">Clases cliente</th>
             <th className="px-4 py-2 font-medium">Relación</th>
           </tr>
         </thead>
