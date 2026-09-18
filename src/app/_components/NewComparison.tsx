@@ -10,10 +10,10 @@ function Drop({ label, hint, file, onFile }: {
   label: string; hint: string; file: File | null; onFile: (f: File | null) => void;
 }) {
   return (
-    <label className="flex-1 cursor-pointer rounded-xl border border-dashed border-[var(--bd)] bg-[var(--bg2)] p-6 text-center hover:border-[var(--acc)]">
+    <label className="flex w-full cursor-pointer flex-col items-center rounded-xl border border-dashed border-[var(--bd)] bg-[var(--bg2)] p-6 text-center hover:border-[var(--acc)]">
       <input type="file" accept=".json,application/json" className="hidden"
         onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
-      <FileJson className="mx-auto mb-2 text-[var(--mut)]" size={26} />
+      <FileJson className="mb-2 text-[var(--mut)]" size={26} />
       <div className="font-medium">{label}</div>
       <div className="mt-1 text-xs text-[var(--mut)]">{file ? file.name : hint}</div>
     </label>
@@ -72,7 +72,7 @@ export default function NewComparison({ carteraInfo }: { carteraInfo: { count: n
           <p className="mb-6 text-sm text-[var(--mut)]">
             Tip: <Link href="/cartera" className="text-[var(--acc)] hover:underline">importa la cartera una sola vez</Link> y luego solo subes gacetas.
           </p>
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+          <div className="mb-4 grid gap-3 sm:grid-cols-2">
             <Drop label="Cartera del cliente" hint="casos.json" file={client} onFile={setClient} />
             <Drop label="Gaceta" hint="CO####.json" file={gazette} onFile={setGazette} />
           </div>

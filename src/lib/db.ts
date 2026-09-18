@@ -14,6 +14,8 @@ export function getDb(): postgres.Sql | null {
       ssl: url.includes("sslmode=disable") ? false : "require",
       max: isPooler ? 1 : 5,
       prepare: !isPooler, // pgbouncer transaction mode no soporta prepared statements
+      connect_timeout: 15,
+      idle_timeout: 20,    // cierra conexiones ociosas para evitar sockets colgados
     });
   }
   return globalForDb._vsionDb;
