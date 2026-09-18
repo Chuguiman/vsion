@@ -82,32 +82,54 @@ interface AiRaw {
   summary?: string;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function callOne(
-  c: Candidate, apiKey: string, model: string, jurisdiction: string, lang: string
+  c: Candidate, apiKey: string, model: string, jurisdiction: string, lang: string, maxRetries = 3
 ): Promise<Candidate["ai"]> {
-  const res = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://vsion.local",
-      "X-Title": "vsion",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: buildUserPrompt(c, jurisdiction, lang) },
-      ],
-    }),
-  });
-  if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const data = await res.json();
-  const text: string = data.choices?.[0]?.message?.content ?? "";
-  const m = text.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("Sin JSON en la respuesta IA");
-  const raw = JSON.parse(m[0]) as AiRaw;
+  const userPrompt = buildUserPrompt(c, jurisdiction, lang);
+  let lastErr: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    if (attempt > 0) await sleep(1000 * 2 ** (attempt - 1) + Math.random() * 500); // backoff exponencial + jitter
+    try {
+      const res = await fetch(ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://vsion.local",
+          "X-Title": "vsion",
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
+      // 429 y 5xx son transitorios → reintentar; 4xx (auth/pago) no
+      if (res.status === 429 || res.status >= 500) {
+        lastErr = new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 160)}`);
+        continue;
+      }
+      if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      const data = await res.json();
+      const text: string = data.choices?.[0]?.message?.content ?? "";
+      const m = text.match(/\{[\s\S]*\}/);
+      if (!m) { lastErr = new Error("Sin JSON en la respuesta IA"); continue; }
+      return parseResult(m[0], model);
+    } catch (err) {
+      lastErr = err; // error de red → reintentar
+    }
+  }
+  throw lastErr ?? new Error("callOne agotó reintentos");
+}
+
+function parseResult(json: string, model: string): NonNullable<Candidate["ai"]> {
+  const raw = JSON.parse(json) as AiRaw;
   const rec = (["file_opposition", "monitor_closely", "no_action"].includes(raw.recommendation ?? "")
     ? raw.recommendation : "no_action") as NonNullable<Candidate["ai"]>["recommendation"];
   return {
