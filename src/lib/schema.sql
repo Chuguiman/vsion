@@ -37,5 +37,12 @@ create table if not exists client_marks (
 );
 create index if not exists client_marks_denom_idx on client_marks (denom);
 
--- (Fase 3) estado de revisión por candidato — se añadirá al aprobar/descartar.
--- create table candidate_reviews (...);
+-- Fase 3: decisión humana por candidato (aprobar / descartar). Tabla aparte
+-- para no colisionar con la escritura del payload de 'runs' durante el análisis.
+create table if not exists reviews (
+  run_id     bigint not null,
+  cand_key   text   not null,   -- <applicationNumber>::<clientCode>::<clientDenom>
+  status     text   not null check (status in ('approved','discarded')),
+  updated_at timestamptz not null default now(),
+  primary key (run_id, cand_key)
+);

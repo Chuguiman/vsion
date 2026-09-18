@@ -2,27 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { BrainCircuit, Loader2 } from "lucide-react";
+import { BrainCircuit, Loader2, Check, X } from "lucide-react";
 import type { ReportDTO, PubDTO, CandDTO, Relation, AiVerdict } from "@/lib/dto";
-import { analyzeBatchAction } from "../actions";
+import { analyzeBatchAction, setReviewAction } from "../actions";
+import type { ReviewStatus } from "@/lib/reviews";
 
 type Filter = Relation | "all";
 
-const REL_LABEL: Record<Relation, string> = {
-  conflict: "Conflicto",
-  firm: "Presentada por tu firma",
-  own: "Tu marca (aviso)",
-};
+const REL_LABEL: Record<Relation, string> = { conflict: "Conflicto", firm: "Presentada por tu firma", own: "Tu marca (aviso)" };
 const REL_CLASS: Record<Relation, string> = {
   conflict: "bg-red-500/15 text-red-300",
   firm: "bg-violet-500/15 text-violet-300",
   own: "bg-blue-500/15 text-blue-300",
 };
-const AI_LABEL: Record<AiVerdict, string> = {
-  file_opposition: "Oponerse",
-  monitor_closely: "Vigilar",
-  no_action: "Sin acción",
-};
+const AI_LABEL: Record<AiVerdict, string> = { file_opposition: "Oponerse", monitor_closely: "Vigilar", no_action: "Sin acción" };
 const AI_CLASS: Record<AiVerdict, string> = {
   file_opposition: "bg-red-500/20 text-red-300",
   monitor_closely: "bg-amber-500/20 text-amber-300",
@@ -32,6 +25,10 @@ const AI_CLASS: Record<AiVerdict, string> = {
 function scoreColor(s: number): string {
   const t = Math.max(0, Math.min(1, (s - 55) / 45));
   return `hsl(${210 - 210 * t}, 78%, 58%)`;
+}
+
+function candKeyOf(pub: PubDTO, c: CandDTO): string {
+  return `${pub.applicationNumber || pub.denom}::${c.clientCode}::${c.clientDenom}`;
 }
 
 function ClassBadges({ clientClasses, match, related }: { clientClasses: number[]; match: number[]; related: number[] }) {
@@ -67,10 +64,29 @@ function RelationCell({ c }: { c: CandDTO }) {
   return <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${REL_CLASS[c.relation]}`}>{REL_LABEL[c.relation]}</span>;
 }
 
-function Row({ c }: { c: CandDTO }) {
-  const col = scoreColor(c.score);
+function ReviewCell({ status, onSet }: { status?: ReviewStatus; onSet: (s: ReviewStatus | null) => void }) {
+  const base = "inline-flex h-7 w-7 items-center justify-center rounded-md border transition";
   return (
-    <tr className="border-b border-[var(--bd)] last:border-0">
+    <div className="flex gap-1">
+      <button title="Aprobar" onClick={() => onSet(status === "approved" ? null : "approved")}
+        className={`${base} ${status === "approved" ? "border-emerald-500 bg-emerald-500/20 text-emerald-300" : "border-[var(--bd)] text-[var(--mut)] hover:text-[var(--tx)]"}`}>
+        <Check size={15} />
+      </button>
+      <button title="Descartar" onClick={() => onSet(status === "discarded" ? null : "discarded")}
+        className={`${base} ${status === "discarded" ? "border-red-500 bg-red-500/20 text-red-300" : "border-[var(--bd)] text-[var(--mut)] hover:text-[var(--tx)]"}`}>
+        <X size={15} />
+      </button>
+    </div>
+  );
+}
+
+function Row({ c, pub, reviewable, status, onReview }: {
+  c: CandDTO; pub: PubDTO; reviewable: boolean; status?: ReviewStatus; onReview: (key: string, s: ReviewStatus | null) => void;
+}) {
+  const col = scoreColor(c.score);
+  const dim = status === "discarded";
+  return (
+    <tr className={`border-b border-[var(--bd)] last:border-0 ${dim ? "opacity-45" : ""}`}>
       <td className="whitespace-nowrap px-4 py-2.5">
         <span className="mr-2 inline-block h-1.5 w-12 overflow-hidden rounded bg-[var(--bd)] align-middle">
           <span className="block h-full" style={{ width: `${c.score}%`, background: col }} />
@@ -78,17 +94,20 @@ function Row({ c }: { c: CandDTO }) {
         <span className="font-mono text-sm font-semibold" style={{ color: col }}>{c.score}</span>
       </td>
       <td className="px-4 py-2.5">
-        <div className="font-semibold">{c.clientDenom}</div>
+        <div className={`font-semibold ${dim ? "line-through" : ""}`}>{c.clientDenom}</div>
         <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
         {c.clientHolder && <div className="text-xs text-blue-300">Titular: {c.clientHolder}</div>}
       </td>
       <td className="px-4 py-2.5"><ClassBadges clientClasses={c.clientClasses} match={c.matchingClasses} related={c.relatedClasses} /></td>
       <td className="px-4 py-2.5"><RelationCell c={c} /></td>
+      {reviewable && <td className="px-4 py-2.5"><ReviewCell status={status} onSet={(s) => onReview(candKeyOf(pub, c), s)} /></td>}
     </tr>
   );
 }
 
-function Pub({ g, filter }: { g: PubDTO; filter: Filter }) {
+function Pub({ g, filter, reviewable, reviews, onReview }: {
+  g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; onReview: (key: string, s: ReviewStatus | null) => void;
+}) {
   const rows = g.candidates.filter((c) => filter === "all" || c.relation === filter);
   if (!rows.length) return null;
   return (
@@ -110,22 +129,40 @@ function Pub({ g, filter }: { g: PubDTO; filter: Filter }) {
             <th className="px-4 py-2 font-medium">Marca del cliente</th>
             <th className="px-4 py-2 font-medium">Clases cliente</th>
             <th className="px-4 py-2 font-medium">Relación</th>
+            {reviewable && <th className="px-4 py-2 font-medium">Revisión</th>}
           </tr>
         </thead>
-        <tbody>{rows.map((c, i) => <Row key={i} c={c} />)}</tbody>
+        <tbody>{rows.map((c, i) => (
+          <Row key={i} c={c} pub={g} reviewable={reviewable} status={reviews[candKeyOf(g, c)]} onReview={onReview} />
+        ))}</tbody>
       </table>
     </section>
   );
 }
 
-export default function Results({ dto, runId }: { dto: ReportDTO; runId?: number }) {
+export default function Results({ dto, runId, reviews: initialReviews }: {
+  dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>;
+}) {
   const [filter, setFilter] = useState<Filter>("conflict");
   const [ai, setAi] = useState<{ running: boolean; analyzed: number; total: number; error?: string } | null>(null);
+  const [reviews, setReviews] = useState<Record<string, ReviewStatus>>(initialReviews ?? {});
   const router = useRouter();
   const { meta, stats, groups } = dto;
+  const reviewable = !!runId;
 
-  // Cuántos conflictos ya tienen veredicto IA
   const analyzedCount = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai).length, 0);
+  const nApproved = Object.values(reviews).filter((s) => s === "approved").length;
+  const nDiscarded = Object.values(reviews).filter((s) => s === "discarded").length;
+
+  function onReview(key: string, status: ReviewStatus | null) {
+    if (!runId) return;
+    setReviews((prev) => {
+      const next = { ...prev };
+      if (status === null) delete next[key]; else next[key] = status;
+      return next;
+    });
+    setReviewAction(runId, key, status).catch(() => {});
+  }
 
   async function analyze() {
     if (!runId) return;
@@ -137,7 +174,7 @@ export default function Results({ dto, runId }: { dto: ReportDTO; runId?: number
         setAi({ running: r.remaining > 0, analyzed: r.analyzed, total: r.total });
         if (r.remaining <= 0) break;
       }
-      router.refresh(); // recargar el payload con los veredictos
+      router.refresh();
     } catch (e) {
       setAi({ running: false, analyzed: analyzedCount, total: stats.conflict, error: e instanceof Error ? e.message : "Error" });
     }
@@ -158,17 +195,13 @@ export default function Results({ dto, runId }: { dto: ReportDTO; runId?: number
   return (
     <div>
       <div className="mb-4 flex flex-wrap gap-3">
-        {showAiKpis ? (
-          <>
-            <Kpi n={nOpp} label="Oponerse" accent="red" />
-            <Kpi n={nMon} label="Vigilar" accent="amber" />
-          </>
-        ) : (
-          <Kpi n={stats.conflict} label="Conflictos" accent="red" />
-        )}
+        {showAiKpis ? (<><Kpi n={nOpp} label="Oponerse" accent="red" /><Kpi n={nMon} label="Vigilar" accent="amber" /></>)
+          : <Kpi n={stats.conflict} label="Conflictos" accent="red" />}
         <Kpi n={stats.firm} label="Presentadas por tu firma" accent="violet" />
         <Kpi n={stats.own} label="Tu marca (aviso)" accent="blue" />
-        <Kpi n={stats.clientCount} label="Marcas cliente" />
+        {reviewable && (nApproved + nDiscarded > 0)
+          ? <Kpi n={nApproved} label={`Aprobadas · ${nDiscarded} descartadas`} accent="green" />
+          : <Kpi n={stats.clientCount} label="Marcas cliente" />}
       </div>
 
       {runId && stats.conflict > 0 && (
@@ -185,14 +218,11 @@ export default function Results({ dto, runId }: { dto: ReportDTO; runId?: number
           ) : (
             <>
               <span className="text-sm">
-                {analyzedCount >= stats.conflict && stats.conflict > 0
-                  ? `IA completada: ${stats.conflict} conflictos analizados.`
-                  : analyzedCount > 0
-                  ? `IA parcial: ${analyzedCount}/${stats.conflict}. Continuar análisis.`
+                {analyzedCount >= stats.conflict && stats.conflict > 0 ? `IA completada: ${stats.conflict} conflictos analizados.`
+                  : analyzedCount > 0 ? `IA parcial: ${analyzedCount}/${stats.conflict}. Continuar análisis.`
                   : `${stats.conflict} conflictos sin analizar. La IA los revisa como un abogado y prioriza.`}
               </span>
-              <button onClick={analyze}
-                className="ml-auto inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-3 py-1.5 text-sm font-medium text-black">
+              <button onClick={analyze} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-3 py-1.5 text-sm font-medium text-black">
                 <BrainCircuit size={15} /> {analyzedCount > 0 && analyzedCount < stats.conflict ? "Continuar IA" : "Analizar con IA"}
               </button>
             </>
@@ -211,14 +241,16 @@ export default function Results({ dto, runId }: { dto: ReportDTO; runId?: number
         </span>
       </div>
 
-      {visible.length ? visible.map((g, i) => <Pub key={i} g={g} filter={filter} />)
-        : <p className="text-[var(--mut)]">Sin resultados para este filtro.</p>}
+      {visible.length ? visible.map((g, i) => (
+        <Pub key={i} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} />
+      )) : <p className="text-[var(--mut)]">Sin resultados para este filtro.</p>}
     </div>
   );
 }
 
-function Kpi({ n, label, accent }: { n: number; label: string; accent?: "red" | "violet" | "blue" | "amber" }) {
-  const color = accent === "red" ? "text-red-300" : accent === "amber" ? "text-amber-300" : accent === "violet" ? "text-violet-300" : accent === "blue" ? "text-blue-300" : "";
+function Kpi({ n, label, accent }: { n: number; label: string; accent?: "red" | "violet" | "blue" | "amber" | "green" }) {
+  const color = accent === "red" ? "text-red-300" : accent === "amber" ? "text-amber-300" : accent === "violet" ? "text-violet-300"
+    : accent === "blue" ? "text-blue-300" : accent === "green" ? "text-emerald-300" : "";
   return (
     <div className="min-w-24 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-4 py-2.5">
       <div className={`text-2xl font-bold ${color}`}>{n}</div>

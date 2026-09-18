@@ -72,15 +72,31 @@ export async function analyzeRunBatch(runId: number, batchSize = 15): Promise<Ba
   const jur = JURISDICTION[dto.meta.country] ?? dto.meta.country;
   const lang = dto.meta.language || "es";
 
-  // Reunir conflictos: total, analizados, pendientes
+  // Reunir conflictos
   const conflicts: { cand: CandDTO; pub: PubDTO }[] = [];
   for (const pub of dto.groups) for (const cand of pub.candidates) if (cand.relation === "conflict") conflicts.push({ cand, pub });
   const total = conflicts.length;
+
+  // Pre-filtro (puerta de clase): un conflicto SIN clase en común/relacionada y con
+  // score < 85 es distinto mercado → la IA diría "no_action". Se resuelve sin llamada.
+  const worthy = (c: CandDTO) => c.matchingClasses.length > 0 || c.relatedClasses.length > 0 || c.score >= 85;
+  for (const { cand } of conflicts) {
+    if (!cand.ai && !worthy(cand)) {
+      cand.ai = {
+        recommendation: "no_action",
+        prob: 0,
+        summary: "Sin clase en común ni relacionada y similitud por debajo de 85%: distinto mercado, sin riesgo de confusión.",
+        reasoning: "Descartado por la puerta de clase (sin coincidencia de clases y score bajo). No requiere revisión.",
+      };
+    }
+  }
+
+  // Solo se llaman los que valen la pena y aún no tienen veredicto
   const pending = conflicts.filter((x) => !x.cand.ai);
   const batch = pending.slice(0, batchSize);
 
   // Pool de concurrencia dentro del lote
-  const concurrency = Math.min(8, Number(process.env.AI_CONCURRENCY ?? 8));
+  const concurrency = Math.min(12, Number(process.env.AI_CONCURRENCY ?? 10));
   let cursor = 0, analyzedNow = 0;
   const worker = async () => {
     while (true) {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
+import { getReviews } from "@/lib/reviews";
 import Results from "@/app/_components/Results";
 import type { ReportDTO } from "@/lib/dto";
 
@@ -15,13 +16,14 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
     SELECT payload FROM runs WHERE id = ${Number(id)}
   `;
   if (!row) return notFound();
+  const reviews = await getReviews(Number(id));
 
   return (
     <div>
       <Link href="/historial" className="mb-4 inline-block text-sm text-[var(--mut)] hover:text-[var(--tx)]">
         ← Historial
       </Link>
-      <Results dto={row.payload} runId={Number(id)} />
+      <Results dto={row.payload} runId={Number(id)} reviews={reviews} />
     </div>
   );
 }

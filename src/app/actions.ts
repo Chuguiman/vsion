@@ -6,6 +6,7 @@ import { toReportDTO, type ReportDTO } from "@/lib/dto";
 import { getDb } from "@/lib/db";
 import { importCartera, loadMarksFromDb, getCarteraInfo } from "@/lib/cartera";
 import { analyzeRunBatch, type BatchResult } from "@/lib/ai-web";
+import { setReview, type ReviewStatus } from "@/lib/reviews";
 import type { ClientMark } from "@/types";
 
 export interface RunResult {
@@ -97,4 +98,14 @@ export async function carteraInfoAction() {
 /** Fase 2: analiza un lote de conflictos con IA y persiste. El cliente llama en bucle. */
 export async function analyzeBatchAction(runId: number, batchSize = 15): Promise<BatchResult> {
   return analyzeRunBatch(runId, batchSize);
+}
+
+/** Fase 3: fija/limpia la decisión humana de un candidato. */
+export async function setReviewAction(runId: number, candKey: string, status: ReviewStatus | null): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await setReview(runId, candKey, status);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
 }
