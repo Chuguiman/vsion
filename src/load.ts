@@ -18,15 +18,23 @@ export function parseClientMarks(rows: any[]): ClientMark[] {
   for (const r of rows) {
     const denom = String(r.caso_titulo ?? "").trim();
     if (!denom) continue;
+    // titular: "NOMBRE, DIRECCION, CIUDAD, DEPTO, PAIS" → nombre = [0], país = último token corto
+    const titularParts = String(r.titular ?? "").split(",").map((s: string) => s.trim()).filter(Boolean);
+    const last = titularParts[titularParts.length - 1] ?? "";
+    const country = last.length <= 3 ? last.toUpperCase() : "";
     marks.push({
       id: String(r.numero_de_caso_id ?? r.id ?? ""),
       code: String(r.numero_de_caso_codigo ?? ""),
       denom,
       classes: parseClasses(r.descripcion_de_productos_y_servicios),
       pys: String(r.productos_y_servicios_descripcion ?? "").trim(),
-      holder: String(r.titular ?? "").split(",")[0].trim(),
+      holder: titularParts[0] ?? "",
       attorney: String(r.apoderado ?? "").split(",")[0].trim(),
       status: String(r.estado_del_caso ?? "").trim(),
+      country,
+      filedDate: String(r.fecha_de_radicacion ?? "").trim(),
+      validUntil: String(r.vigencia ?? "").trim(),
+      registerDate: String(r.fecha_de_registro ?? "").trim(),
       keys: computeKeys(denom),
     });
   }
@@ -58,8 +66,9 @@ export function parseGazette(doc: any): { meta: GazetteMeta; entries: GazetteEnt
     const pys = Array.isArray(d.pys)
       ? d.pys.map((p: any) => `${p.clase ? p.clase + ". " : ""}${p.descripcion ?? ""}`).join(" ").trim()
       : "";
-    const applicant = Array.isArray(d.applicants) && d.applicants[0]
-      ? String(d.applicants[0].aplicantName ?? "").trim() : "";
+    const ap = Array.isArray(d.applicants) && d.applicants[0] ? d.applicants[0] : {};
+    const applicant = String(ap.aplicantName ?? "").trim();
+    const applicantCountry = String(ap.aplicantCountry ?? "").trim().toUpperCase();
     const representant = Array.isArray(d.representants) && d.representants[0]
       ? String(d.representants[0].representant_name ?? "").trim() : "";
     entries.push({
@@ -67,8 +76,11 @@ export function parseGazette(doc: any): { meta: GazetteMeta; entries: GazetteEnt
       classes: parseClasses(d.clases),
       pys,
       applicant,
+      applicantCountry,
       representant,
       applicationNumber: String(d.applicationNumber ?? "").trim(),
+      applicationDate: String(d.applicationDate ?? "").trim(),
+      priority: String(d.prioridad ?? "").trim(),
       markType: String(d.markType ?? "").trim(),
       status: String(d.markStatus ?? "").trim(),
       image: String(d.image ?? "").trim(),

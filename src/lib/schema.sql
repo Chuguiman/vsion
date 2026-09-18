@@ -33,8 +33,17 @@ create table if not exists client_marks (
   holder     text,
   attorney   text,
   status     text,
+  country    text,
+  filed_date text,
+  valid_until text,
+  register_date text,
   created_at timestamptz not null default now()
 );
+-- columnas añadidas después de la creación inicial (idempotente)
+alter table client_marks add column if not exists country text;
+alter table client_marks add column if not exists filed_date text;
+alter table client_marks add column if not exists valid_until text;
+alter table client_marks add column if not exists register_date text;
 create index if not exists client_marks_denom_idx on client_marks (denom);
 
 -- Fase 3: decisión humana por candidato (aprobar / descartar). Tabla aparte

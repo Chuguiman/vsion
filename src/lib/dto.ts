@@ -21,6 +21,10 @@ export interface CandDTO {
   clientStatus: string;
   clientClasses: number[];
   clientPys: string;
+  clientCountry: string;
+  clientFiled: string;
+  clientValid: string;
+  clientRegister: string;
   score: number;
   matchingClasses: number[];
   relatedClasses: number[];
@@ -39,7 +43,10 @@ export interface PubDTO {
   denom: string;
   applicationNumber: string;
   applicant: string;
+  applicantCountry: string;
   representant: string;
+  applicationDate: string;
+  priority: string;
   markType: string;
   image: string;
   classes: number[];
@@ -69,7 +76,10 @@ export function toReportDTO(
         denom: c.gazette.denom,
         applicationNumber: c.gazette.applicationNumber,
         applicant: c.gazette.applicant,
+        applicantCountry: c.gazette.applicantCountry,
         representant: c.gazette.representant,
+        applicationDate: c.gazette.applicationDate,
+        priority: c.gazette.priority,
         markType: c.gazette.markType,
         image: c.gazette.image,
         classes: c.gazette.classes,
@@ -89,6 +99,10 @@ export function toReportDTO(
       clientStatus: c.client.status,
       clientClasses: c.client.classes,
       clientPys: c.client.pys.slice(0, 400),
+      clientCountry: c.client.country,
+      clientFiled: c.client.filedDate,
+      clientValid: c.client.validUntil,
+      clientRegister: c.client.registerDate,
       score: c.score,
       matchingClasses: c.matchingClasses,
       relatedClasses: c.relatedClasses,

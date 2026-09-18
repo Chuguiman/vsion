@@ -10,6 +10,10 @@ export interface ClientMark {
   holder: string;         // titular (nombre)
   attorney: string;       // apoderado (nombre)
   status: string;         // estado_del_caso
+  country: string;        // país del titular (última parte de titular)
+  filedDate: string;      // fecha_de_radicacion
+  validUntil: string;     // vigencia
+  registerDate: string;   // fecha_de_registro
   keys: PhoneticKeys;
 }
 
@@ -19,8 +23,11 @@ export interface GazetteEntry {
   classes: number[];      // clases
   pys: string;            // pys concatenado
   applicant: string;      // solicitante
+  applicantCountry: string; // país del solicitante
   representant: string;   // representante / apoderado
   applicationNumber: string;
+  applicationDate: string; // fecha de solicitud
+  priority: string;       // prioridad (si aplica)
   markType: string;
   status: string;
   image: string;          // id de imagen SIC (p.ej. "0900000282554b53")

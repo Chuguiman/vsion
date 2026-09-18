@@ -163,7 +163,7 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("pending");
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [savingCount, setSavingCount] = useState(0);
-  const [exporting, setExporting] = useState<"pdf" | "xlsx" | null>(null);
+  const [exporting, setExporting] = useState<"pdf" | "pdf_full" | "xlsx" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const savingReviews = useRef(new Set<string>());
   const router = useRouter();
@@ -243,15 +243,17 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
   const nMon = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai?.recommendation === "monitor_closely").length, 0);
   const showAiKpis = analyzedCount > 0;
 
-  async function exportApproved(format: "pdf" | "xlsx") {
+  async function exportApproved(format: "pdf" | "pdf_full" | "xlsx") {
     if (reviewFilter !== "approved" || !visible.length || savingReviews.current.size || exporting) return;
     setExporting(format);
     setExportError(null);
     try {
-      const { createApprovedExcel, createApprovedPdf, downloadExport } = await import("@/lib/review-export");
-      const blob = await (format === "pdf" ? createApprovedPdf : createApprovedExcel)(visible, meta);
+      const { createApprovedExcel, createApprovedPdf, createFichasPdf, downloadExport } = await import("@/lib/review-export");
+      const blob = await (format === "pdf" ? createApprovedPdf : format === "pdf_full" ? createFichasPdf : createApprovedExcel)(visible, meta);
       const gazette = `${meta.country}${meta.number}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-      downloadExport(blob, `vsion-${gazette}-aprobadas.${format}`);
+      const ext = format === "xlsx" ? "xlsx" : "pdf";
+      const suffix = format === "pdf_full" ? "aprobadas-fichas" : "aprobadas";
+      downloadExport(blob, `vsion-${gazette}-${suffix}.${ext}`);
     } catch {
       setExportError("No se pudo generar el archivo. Vuelve a intentarlo.");
     } finally {
@@ -325,12 +327,12 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
       {reviewable && reviewFilter === "approved" && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="mr-auto text-sm text-[var(--mut)]">Exportar aprobadas de esta vista ({reviewCounts.approved})</span>
-          {(["pdf", "xlsx"] as const).map((format) => (
+          {([["pdf", "PDF simple"], ["pdf_full", "PDF completo"], ["xlsx", "Excel"]] as const).map(([format, label]) => (
             <button key={format} onClick={() => exportApproved(format)}
               disabled={!visible.length || savingCount > 0 || exporting !== null}
               className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40">
               {exporting === format ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-              Exportar {format === "pdf" ? "PDF" : "Excel"}
+              {label}
             </button>
           ))}
           {exportError && <p role="alert" className="w-full text-sm text-red-300">{exportError}</p>}
