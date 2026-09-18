@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 import { getReviews } from "@/lib/reviews";
 import Results from "@/app/_components/Results";
 import type { ReportDTO } from "@/lib/dto";
@@ -16,14 +17,15 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
     SELECT payload FROM runs WHERE id = ${Number(id)}
   `;
   if (!row) return notFound();
-  const reviews = await getReviews(Number(id));
+  const [reviews, session] = await Promise.all([getReviews(Number(id)), getSession()]);
+  const canEdit = session?.role === "superadmin";
 
   return (
     <div>
       <Link href="/historial" className="mb-4 inline-block text-sm text-[var(--mut)] hover:text-[var(--tx)]">
         ← Historial
       </Link>
-      <Results dto={row.payload} runId={Number(id)} reviews={reviews} />
+      <Results dto={row.payload} runId={Number(id)} reviews={reviews} canEdit={canEdit} />
     </div>
   );
 }

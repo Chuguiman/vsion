@@ -1,5 +1,16 @@
 -- Esquema vsion (Supabase / Postgres). Ejecutar una vez en el nuevo proyecto.
 
+-- Usuarios y roles. Bootstrap: el primer registro queda como superadmin;
+-- luego el registro público se cierra y el superadmin crea las demás cuentas.
+create table if not exists users (
+  id            bigint generated always as identity primary key,
+  email         text unique not null,
+  password_hash text not null,
+  name          text,
+  role          text not null default 'user' check (role in ('superadmin','admin','user')),
+  created_at    timestamptz not null default now()
+);
+
 -- Corrida de comparación (una por gaceta procesada)
 create table if not exists runs (
   id            bigint generated always as identity primary key,

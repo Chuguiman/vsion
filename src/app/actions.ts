@@ -7,6 +7,7 @@ import { getDb } from "@/lib/db";
 import { importCartera, loadMarksFromDb, getCarteraInfo } from "@/lib/cartera";
 import { analyzeRunBatch, type BatchResult } from "@/lib/ai-web";
 import { setReview, type ReviewStatus } from "@/lib/reviews";
+import { getSession } from "@/lib/auth";
 import type { ClientMark } from "@/types";
 
 export interface RunResult {
@@ -46,8 +47,15 @@ async function sweepAndSave(marks: ClientMark[], gazetteDoc: any, t0: number): P
   return { ok: true, dto, runId, elapsedMs: Date.now() - t0 };
 }
 
+async function requireUploader(): Promise<RunResult | null> {
+  const s = await getSession();
+  if (s?.role !== "superadmin") return { ok: false, error: "No autorizado." };
+  return null;
+}
+
 /** Compara subiendo AMBOS archivos (cartera + gaceta). Funciona sin BD. */
 export async function runComparison(clientText: string, gazetteText: string): Promise<RunResult> {
+  const denied = await requireUploader(); if (denied) return denied;
   const t0 = Date.now();
   let clientRows: any, gazetteDoc: any;
   try {
@@ -62,6 +70,7 @@ export async function runComparison(clientText: string, gazetteText: string): Pr
 
 /** Compara usando la cartera ya importada en la BD; solo se sube la gaceta. */
 export async function runComparisonFromDb(gazetteText: string): Promise<RunResult> {
+  const denied = await requireUploader(); if (denied) return denied;
   const t0 = Date.now();
   let gazetteDoc: any;
   try {
@@ -76,6 +85,8 @@ export async function runComparisonFromDb(gazetteText: string): Promise<RunResul
 
 /** Importa/reemplaza la cartera del cliente en la BD. */
 export async function importCarteraAction(clientText: string): Promise<{ ok: boolean; count?: number; error?: string }> {
+  const s = await getSession();
+  if (s?.role !== "superadmin") return { ok: false, error: "No autorizado." };
   let rows: any;
   try {
     rows = JSON.parse(clientText);
@@ -97,12 +108,16 @@ export async function carteraInfoAction() {
 
 /** Fase 2: analiza un lote de conflictos con IA y persiste. El cliente llama en bucle. */
 export async function analyzeBatchAction(runId: number, batchSize = 15): Promise<BatchResult> {
+  const s = await getSession();
+  if (s?.role !== "superadmin") return { ok: false, error: "No autorizado.", analyzed: 0, total: 0, remaining: 0 };
   return analyzeRunBatch(runId, batchSize);
 }
 
 /** Fase 3: fija/limpia la decisión humana de un candidato. */
 export async function setReviewAction(runId: number, candKey: string, status: ReviewStatus | null): Promise<{ ok: boolean; error?: string }> {
   try {
+    const s = await getSession();
+    if (s?.role !== "superadmin") return { ok: false, error: "No autorizado." };
     await setReview(runId, candKey, status);
     return { ok: true };
   } catch (e) {

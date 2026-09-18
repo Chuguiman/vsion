@@ -154,8 +154,8 @@ function Pub({ g, filter, reviewable, reviews, onReview }: {
   );
 }
 
-export default function Results({ dto, runId, reviews: initialReviews }: {
-  dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>;
+export default function Results({ dto, runId, reviews: initialReviews, canEdit = false }: {
+  dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>; canEdit?: boolean;
 }) {
   const [selectedFilter, setFilter] = useState<Filter | null>(null);
   const [ai, setAi] = useState<{ running: boolean; analyzed: number; total: number; error?: string } | null>(null);
@@ -168,7 +168,7 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
   const savingReviews = useRef(new Set<string>());
   const router = useRouter();
   const { meta, stats, groups } = dto;
-  const reviewable = !!runId;
+  const reviewable = !!runId && canEdit;
 
   const analyzedCount = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai).length, 0);
   const analysisComplete = stats.conflict > 0 && analyzedCount >= stats.conflict;
@@ -273,7 +273,7 @@ export default function Results({ dto, runId, reviews: initialReviews }: {
           : <Kpi n={stats.clientCount} label="Marcas cliente" />}
       </div>
 
-      {runId && stats.conflict > 0 && !analysisComplete && (
+      {runId && canEdit && stats.conflict > 0 && !analysisComplete && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-4 py-3">
           <BrainCircuit size={18} className="text-[var(--acc)]" />
           {ai?.running ? (
