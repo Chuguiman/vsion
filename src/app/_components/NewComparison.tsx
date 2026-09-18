@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { UploadCloud, Loader2, FileJson, Database } from "lucide-react";
 import { runComparison, runComparisonFromDb, type RunResult } from "../actions";
 import Results from "./Results";
@@ -21,6 +22,7 @@ function Drop({ label, hint, file, onFile }: {
 }
 
 export default function NewComparison({ carteraInfo }: { carteraInfo: { count: number; updatedAt: string | null } | null }) {
+  const router = useRouter();
   const hasCartera = !!carteraInfo && carteraInfo.count > 0;
   const [client, setClient] = useState<File | null>(null);
   const [gazette, setGazette] = useState<File | null>(null);
@@ -33,12 +35,12 @@ export default function NewComparison({ carteraInfo }: { carteraInfo: { count: n
     setBusy(true); setRes(null);
     try {
       const gazetteText = await gazette.text();
-      if (hasCartera) {
-        setRes(await runComparisonFromDb(gazetteText));
-      } else {
-        const clientText = await client!.text();
-        setRes(await runComparison(clientText, gazetteText));
-      }
+      const r = hasCartera
+        ? await runComparisonFromDb(gazetteText)
+        : await runComparison(await client!.text(), gazetteText);
+      // Guardó en historial → ir a la vista de resultados dedicada.
+      if (r.ok && r.runId) { router.push(`/runs/${r.runId}`); return; }
+      setRes(r); // sin BD: mostrar inline como fallback
     } catch (e) {
       setRes({ ok: false, error: e instanceof Error ? e.message : "Error al procesar" });
     } finally {

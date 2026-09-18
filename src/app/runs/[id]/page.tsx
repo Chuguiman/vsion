@@ -21,7 +21,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
       <Link href="/historial" className="mb-4 inline-block text-sm text-[var(--mut)] hover:text-[var(--tx)]">
         ← Historial
       </Link>
-      <Results dto={row.payload} />
+      <Results dto={row.payload} runId={Number(id)} />
     </div>
   );
 }

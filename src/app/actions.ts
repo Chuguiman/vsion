@@ -5,6 +5,7 @@ import { sweep } from "@/sweep";
 import { toReportDTO, type ReportDTO } from "@/lib/dto";
 import { getDb } from "@/lib/db";
 import { importCartera, loadMarksFromDb, getCarteraInfo } from "@/lib/cartera";
+import { analyzeRunBatch, type BatchResult } from "@/lib/ai-web";
 import type { ClientMark } from "@/types";
 
 export interface RunResult {
@@ -91,4 +92,9 @@ export async function importCarteraAction(clientText: string): Promise<{ ok: boo
 
 export async function carteraInfoAction() {
   return getCarteraInfo();
+}
+
+/** Fase 2: analiza un lote de conflictos con IA y persiste. El cliente llama en bucle. */
+export async function analyzeBatchAction(runId: number, batchSize = 15): Promise<BatchResult> {
+  return analyzeRunBatch(runId, batchSize);
 }

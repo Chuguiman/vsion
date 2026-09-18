@@ -5,6 +5,14 @@ import type { Candidate, GazetteMeta } from "@/types";
 
 export type Relation = "own" | "firm" | "conflict";
 
+export type AiVerdict = "file_opposition" | "monitor_closely" | "no_action";
+export interface AiResult {
+  recommendation: AiVerdict;
+  prob: number;
+  summary: string;
+  reasoning: string;
+}
+
 export interface CandDTO {
   clientDenom: string;
   clientCode: string;
@@ -12,10 +20,12 @@ export interface CandDTO {
   clientAttorney: string;
   clientStatus: string;
   clientClasses: number[];
+  clientPys: string;
   score: number;
   matchingClasses: number[];
   relatedClasses: number[];
   relation: Relation;   // own = tu marca | firm = tu firma la presentó | conflict = tercero
+  ai?: AiResult;        // veredicto IA (solo conflictos, tras Fase 2)
 }
 
 /** own = mismo titular; firm = tu firma es el apoderado de la solicitud; conflict = tercero */
@@ -33,6 +43,7 @@ export interface PubDTO {
   markType: string;
   image: string;
   classes: number[];
+  pys: string;
   candidates: CandDTO[];
   hasConflict: boolean;   // tiene algún candidato que NO es aviso (posible oposición)
   topScore: number;
@@ -62,6 +73,7 @@ export function toReportDTO(
         markType: c.gazette.markType,
         image: c.gazette.image,
         classes: c.gazette.classes,
+        pys: c.gazette.pys.slice(0, 500),
         candidates: [],
         hasConflict: false,
         topScore: 0,
@@ -76,6 +88,7 @@ export function toReportDTO(
       clientAttorney: c.client.attorney,
       clientStatus: c.client.status,
       clientClasses: c.client.classes,
+      clientPys: c.client.pys.slice(0, 400),
       score: c.score,
       matchingClasses: c.matchingClasses,
       relatedClasses: c.relatedClasses,
