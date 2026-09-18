@@ -38,8 +38,16 @@ Salida en `out/CO####-report.html` y `out/CO####-report.xlsx`.
 | `--ai-all` | | Manda todos los candidatos a la IA (por defecto pre-filtra por clase/score) |
 | `--threshold <n>` | 55 | Score mínimo del barrido (0-100) |
 | `--topn <n>` | 15 | Máx candidatos por publicación |
+| `--concurrency <n>` | 8 | Llamadas IA en paralelo (baja a 4-6 si hay rate-limit) |
 | `--model <id>` | env | Modelo OpenRouter |
 | `--out <dir>` | out | Carpeta de salida |
+
+## Cache de IA (importante)
+
+Cada corrida guarda los veredictos en `out/CO####-ai-cache.json`. Si OpenRouter
+rate-limitea y algunos candidatos fallan, **vuelve a correr el mismo comando**:
+el cache reutiliza los ya resueltos (no se re-pagan) y solo reintenta los fallidos,
+hasta converger a 0 fallos. Borra ese archivo si quieres re-analizar desde cero.
 
 ## Formatos de entrada
 

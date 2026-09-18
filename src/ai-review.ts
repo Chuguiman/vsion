@@ -3,6 +3,7 @@
  * System prompt portado de samai-next/src/lib/ai-analysis.ts (filtro de abogado).
  * Solo procesa los candidatos que sobrevivieron al barrido.
  */
+import { readFileSync, writeFileSync } from "node:fs";
 import type { Candidate } from "./types.js";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
@@ -147,32 +148,64 @@ export interface ReviewOptions {
   concurrency: number;
   jurisdiction: string;
   language: string;
+  cachePath?: string;   // JSON persistente: key → veredicto. Re-runs saltan lo ya hecho.
   onProgress?: (done: number, total: number, failed: number) => void;
 }
 
-/** Revisa candidatos en paralelo. Muta cand.ai. Devuelve conteos. */
+/** Clave estable de un par para el cache (independiente del score del barrido) */
+function cacheKey(c: Candidate): string {
+  return `${c.gazette.applicationNumber || c.gazette.denom}::${c.client.id || c.client.code}::${c.client.denom}`;
+}
+
+type Cache = Record<string, NonNullable<Candidate["ai"]>>;
+
+function loadCache(path?: string): Cache {
+  if (!path) return {};
+  try { return JSON.parse(readFileSync(path, "utf8")) as Cache; } catch { return {}; }
+}
+
+/**
+ * Revisa candidatos en paralelo. Muta cand.ai. Cachea a disco: los pares ya
+ * resueltos en corridas previas se reutilizan (no se re-pagan) y solo se llaman
+ * los pendientes — así los re-runs convergen sobre los fallos transitorios.
+ */
 export async function reviewCandidates(
   candidates: Candidate[], opts: ReviewOptions
-): Promise<{ analyzed: number; failed: number }> {
+): Promise<{ analyzed: number; failed: number; cached: number }> {
   const jur = JURISDICTION[opts.jurisdiction] ?? opts.jurisdiction;
-  let cursor = 0, analyzed = 0, failed = 0;
+  const cache = loadCache(opts.cachePath);
+
+  // 1) Aplicar cache y separar pendientes
+  const pending: Candidate[] = [];
+  let cached = 0;
+  for (const c of candidates) {
+    const hit = cache[cacheKey(c)];
+    if (hit) { c.ai = hit; cached++; } else pending.push(c);
+  }
+
+  let cursor = 0, analyzed = 0, failed = 0, sinceFlush = 0;
+  const flush = () => { if (opts.cachePath) { try { writeFileSync(opts.cachePath, JSON.stringify(cache)); } catch {} } };
 
   const worker = async () => {
     while (true) {
       const idx = cursor++;
-      if (idx >= candidates.length) break;
-      const cand = candidates[idx];
+      if (idx >= pending.length) break;
+      const cand = pending[idx];
       try {
-        cand.ai = await callOne(cand, opts.apiKey, opts.model, jur, opts.language);
+        const ai = await callOne(cand, opts.apiKey, opts.model, jur, opts.language);
+        cand.ai = ai;
+        if (ai) cache[cacheKey(cand)] = ai;
         analyzed++;
+        if (++sinceFlush >= 20) { sinceFlush = 0; flush(); }
       } catch (err) {
         failed++;
         console.error(`[ai] fallo ${cand.gazette.denom} vs ${cand.client.denom}:`, err instanceof Error ? err.message : err);
       }
-      opts.onProgress?.(analyzed + failed, candidates.length, failed);
+      opts.onProgress?.(analyzed + failed, pending.length, failed);
     }
   };
 
   await Promise.all(Array.from({ length: Math.max(1, opts.concurrency) }, worker));
-  return { analyzed, failed };
+  flush();
+  return { analyzed, failed, cached };
 }

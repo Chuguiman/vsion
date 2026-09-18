@@ -80,18 +80,20 @@ async function main() {
         ? candidates
         : candidates.filter((c) => c.matchingClasses.length || c.relatedClasses.length || c.score >= 85);
       const model = arg("model") ?? process.env.AI_MODEL ?? "deepseek/deepseek-chat";
-      const concurrency = Number(process.env.AI_CONCURRENCY ?? 20);
+      const concurrency = Number(arg("concurrency") ?? process.env.AI_CONCURRENCY ?? 8);
+      const cachePath = join(outDir, `${meta.country}${meta.number}-ai-cache.json`);
       console.log(`\nEtapa 2 — revisión IA (${model}, concurrencia ${concurrency})`);
       console.log(`  Candidatos a revisar: ${toReview.length}${aiAll ? "" : ` (pre-filtrados de ${candidates.length})`}`);
 
       const t0 = Date.now();
-      const { analyzed, failed } = await reviewCandidates(toReview, {
-        apiKey, model, concurrency, jurisdiction: meta.country, language: meta.language,
+      const { analyzed, failed, cached } = await reviewCandidates(toReview, {
+        apiKey, model, concurrency, jurisdiction: meta.country, language: meta.language, cachePath,
         onProgress: (done, total) => process.stdout.write(`\r  Progreso: ${done}/${total}   `),
       });
       process.stdout.write("\n");
-      console.log(`  Analizados: ${analyzed}, fallidos: ${failed}, en ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-      aiRan = analyzed > 0;
+      console.log(`  Reusados de cache: ${cached}, analizados ahora: ${analyzed}, fallidos: ${failed}, en ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+      if (failed > 0) console.log(`  Tip: vuelve a correr el mismo comando — el cache salta los ${cached + analyzed} ya resueltos y reintenta solo los ${failed} fallidos.`);
+      aiRan = analyzed + cached > 0;
     }
   }
 
