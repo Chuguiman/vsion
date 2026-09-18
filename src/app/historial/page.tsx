@@ -4,9 +4,12 @@ import { getDb } from "@/lib/db";
 export const dynamic = "force-dynamic";
 
 interface RunRow {
-  id: number; country: string; gazette_number: string; date_public: string | null;
-  n_candidates: number; n_own: number; created_at: string;
+  id: number; country: string; gazette_number: string; date_public: string | Date | null;
+  n_candidates: number; n_own: number; created_at: string | Date;
 }
+
+const fmtDate = (d: string | Date | null) => (d ? new Date(d).toLocaleDateString("es") : "—");
+const fmtDateTime = (d: string | Date) => new Date(d).toLocaleString("es");
 
 export default async function Historial() {
   const db = getDb();
@@ -51,10 +54,10 @@ export default async function Historial() {
                       {r.country}{r.gazette_number}
                     </Link>
                   </td>
-                  <td className="px-4 py-2.5 text-[var(--mut)]">{r.date_public ?? "—"}</td>
+                  <td className="px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.date_public)}</td>
                   <td className="px-4 py-2.5">{r.n_candidates - r.n_own}</td>
                   <td className="px-4 py-2.5 text-blue-300">{r.n_own}</td>
-                  <td className="px-4 py-2.5 text-[var(--mut)]">{new Date(r.created_at).toLocaleString("es")}</td>
+                  <td className="px-4 py-2.5 text-[var(--mut)]">{fmtDateTime(r.created_at)}</td>
                 </tr>
               ))}
             </tbody>
