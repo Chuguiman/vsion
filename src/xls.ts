@@ -13,7 +13,7 @@ const REC_LABEL: Record<string, string> = {
 export function writeXlsx(cands: Candidate[], meta: GazetteMeta, outPath: string): void {
   const rows = cands.map((c) => ({
     "Gaceta": `${meta.country}${meta.number}`,
-    "Relación": c.sameOwner ? "Aviso publicación (mismo titular)" : "Confusión (analizado)",
+    "Relación": c.sameOwner ? "Tu marca (aviso)" : c.sameAttorney ? "Presentada por tu firma" : "Conflicto (tercero)",
     "Solicitud (nueva)": c.gazette.denom,
     "N.º solicitud": c.gazette.applicationNumber,
     "Tipo": c.gazette.markType,
@@ -31,7 +31,7 @@ export function writeXlsx(cands: Candidate[], meta: GazetteMeta, outPath: string
     "Score": c.score,
     "Clases en común": c.matchingClasses.join(", "),
     "Clases relacionadas": c.relatedClasses.join(", "),
-    "Veredicto IA": c.sameOwner ? "Tu marca (aviso)" : REC_LABEL[c.ai?.recommendation ?? "no_action"],
+    "Veredicto IA": c.sameOwner ? "Tu marca (aviso)" : c.sameAttorney ? "Presentada por tu firma" : REC_LABEL[c.ai?.recommendation ?? "no_action"],
     "Prob. éxito %": c.ai?.success_probability ?? "",
     "Resumen IA": c.ai?.summary ?? "",
     "Razonamiento IA": c.ai?.reasoning ?? "",

@@ -8,12 +8,14 @@ const REC_LABEL: Record<string, string> = {
   monitor_closely: "Vigilar",
   no_action: "Sin acción",
   own: "Tu marca (aviso)",
+  firm: "Presentada por tu firma",
 };
-const REC_RANK: Record<string, number> = { file_opposition: 0, monitor_closely: 1, own: 2, no_action: 3 };
+const REC_RANK: Record<string, number> = { file_opposition: 0, monitor_closely: 1, firm: 2, own: 3, no_action: 4 };
 
-/** Categoría de una fila: mismo titular → aviso; si no, el veredicto IA */
+/** Categoría: mismo titular → tu marca; tu firma es apoderado → firm; si no, veredicto IA */
 function rowKind(c: Candidate): string {
   if (c.sameOwner) return "own";
+  if (c.sameAttorney) return "firm";
   return c.ai?.recommendation ?? "no_action";
 }
 
@@ -65,11 +67,13 @@ function candRow(c: Candidate): string {
     ...c.relatedClasses.map((n) => `<span class="cls rel">${n}</span>`),
   ].join("") || '<span class="cls none">—</span>';
   const holder = c.client.holder ? `<div class="sub owner">Titular: ${esc(c.client.holder)}</div>` : "";
-  const verdict = kind === "own"
-    ? `${badge("own")}${c.sameAttorney ? '<div class="prob">mismo apoderado</div>' : ""}`
+  const verdict = kind === "own" || kind === "firm"
+    ? badge(kind)
     : `${badge(kind)}${c.ai ? `<div class="prob">${c.ai.success_probability}%</div>` : ""}`;
   const analysis = kind === "own"
     ? "Solicitante = titular de tu marca. Es tu propia solicitud publicándose; no procede oposición, solo aviso."
+    : kind === "firm"
+    ? "La solicitud nueva la presentó tu propia firma (mismo apoderado) para otro titular. No es oposición externa; revisar internamente."
     : `${esc(c.ai?.summary || "")}${c.ai?.reasoning ? `<details><summary>razonamiento</summary><p>${esc(c.ai.reasoning)}</p></details>` : ""}`;
   return `
   <tr class="cand" data-rec="${kind}">
@@ -150,6 +154,7 @@ tr:last-child td{border-bottom:none}
 .badge.monitor_closely{background:rgba(245,158,11,.15);color:#fcd34d}
 .badge.no_action{background:var(--bd);color:var(--mut)}
 .badge.own{background:rgba(59,130,246,.15);color:#93c5fd}
+.badge.firm{background:rgba(139,92,246,.15);color:#c4b5fd}
 .prob{font-size:11px;color:var(--mut);margin-top:3px}
 .reason{max-width:360px;color:var(--tx)}
 .reason details{margin-top:6px} .reason summary{cursor:pointer;color:var(--acc);font-size:12px}

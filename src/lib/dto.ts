@@ -3,6 +3,8 @@ import type { Candidate, GazetteMeta } from "@/types";
 // DTO plano y serializable (los Candidate llevan Set en keys, no cruzan
 // el límite del server action → hay que aplanar).
 
+export type Relation = "own" | "firm" | "conflict";
+
 export interface CandDTO {
   clientDenom: string;
   clientCode: string;
@@ -13,8 +15,14 @@ export interface CandDTO {
   score: number;
   matchingClasses: number[];
   relatedClasses: number[];
-  sameOwner: boolean;
-  sameAttorney: boolean;
+  relation: Relation;   // own = tu marca | firm = tu firma la presentó | conflict = tercero
+}
+
+/** own = mismo titular; firm = tu firma es el apoderado de la solicitud; conflict = tercero */
+function relationOf(c: Candidate): Relation {
+  if (c.sameOwner) return "own";
+  if (c.sameAttorney) return "firm";
+  return "conflict";
 }
 
 export interface PubDTO {
@@ -32,7 +40,7 @@ export interface PubDTO {
 
 export interface ReportDTO {
   meta: GazetteMeta;
-  stats: { clientCount: number; gazetteCount: number; skipped: number; candidates: number; own: number };
+  stats: { clientCount: number; gazetteCount: number; skipped: number; candidates: number; own: number; firm: number; conflict: number };
   groups: PubDTO[];
 }
 
@@ -60,6 +68,7 @@ export function toReportDTO(
       };
       map.set(key, g);
     }
+    const relation = relationOf(c);
     g.candidates.push({
       clientDenom: c.client.denom,
       clientCode: c.client.code,
@@ -70,24 +79,26 @@ export function toReportDTO(
       score: c.score,
       matchingClasses: c.matchingClasses,
       relatedClasses: c.relatedClasses,
-      sameOwner: c.sameOwner,
-      sameAttorney: c.sameAttorney,
+      relation,
     });
-    if (!c.sameOwner) g.hasConflict = true;
+    if (relation === "conflict") g.hasConflict = true;
     if (c.score > g.topScore) g.topScore = c.score;
   }
 
+  const rank: Record<Relation, number> = { conflict: 0, firm: 1, own: 2 };
   for (const g of map.values()) {
-    g.candidates.sort((a, b) => Number(a.sameOwner) - Number(b.sameOwner) || b.score - a.score);
+    g.candidates.sort((a, b) => rank[a.relation] - rank[b.relation] || b.score - a.score);
   }
   const groups = [...map.values()].sort(
     (a, b) => Number(b.hasConflict) - Number(a.hasConflict) || b.topScore - a.topScore
   );
 
-  const own = candidates.filter((c) => c.sameOwner).length;
+  const own = candidates.filter((c) => relationOf(c) === "own").length;
+  const firm = candidates.filter((c) => relationOf(c) === "firm").length;
+  const conflict = candidates.filter((c) => relationOf(c) === "conflict").length;
   return {
     meta,
-    stats: { ...extra, candidates: candidates.length, own },
+    stats: { ...extra, candidates: candidates.length, own, firm, conflict },
     groups,
   };
 }

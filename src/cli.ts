@@ -69,13 +69,14 @@ async function main() {
   console.log(`  Pares evaluados: ${stats.pairsScored.toLocaleString()} en ${stats.elapsedMs} ms`);
   console.log(`  Candidatos (score >= ${threshold}): ${candidates.length}`);
 
-  // Mismo titular = tu propia marca publicándose. No es oposición: aviso de
-  // publicación. No se analiza con IA (se separa y no gasta tokens).
+  // No son oposiciones externas (no se analizan con IA):
+  //  - mismo titular → tu propia marca publicándose (aviso de publicación)
+  //  - mismo apoderado → la solicitud la presentó tu propia firma para otro titular
   const ownPublications = candidates.filter((c) => c.sameOwner);
-  const forConfusion = candidates.filter((c) => !c.sameOwner);
-  if (ownPublications.length) {
-    console.log(`  Aviso de publicación (mismo titular, no se analizan): ${ownPublications.length}`);
-  }
+  const firmFiled = candidates.filter((c) => !c.sameOwner && c.sameAttorney);
+  const forConfusion = candidates.filter((c) => !c.sameOwner && !c.sameAttorney);
+  if (ownPublications.length) console.log(`  Tu marca (aviso de publicación): ${ownPublications.length}`);
+  if (firmFiled.length) console.log(`  Presentadas por tu firma (no oposición): ${firmFiled.length}`);
 
   // ── Etapa 2: IA ─────────────────────────────────────────────────────
   let aiRan = false;
@@ -112,10 +113,10 @@ async function main() {
   writeFileSync(htmlPath, buildHtml(candidates, meta, aiRan), "utf8");
   writeXlsx(candidates, meta, xlsxPath);
 
-  const opp = candidates.filter((c) => c.ai?.recommendation === "file_opposition").length;
-  const mon = candidates.filter((c) => c.ai?.recommendation === "monitor_closely").length;
+  const opp = candidates.filter((c) => !c.sameOwner && !c.sameAttorney && c.ai?.recommendation === "file_opposition").length;
+  const mon = candidates.filter((c) => !c.sameOwner && !c.sameAttorney && c.ai?.recommendation === "monitor_closely").length;
   console.log("\nListo.");
-  if (aiRan) console.log(`  Oponerse: ${opp} · Vigilar: ${mon} · Aviso publicación: ${ownPublications.length}`);
+  if (aiRan) console.log(`  Oponerse: ${opp} · Vigilar: ${mon} · Tu firma: ${firmFiled.length} · Tu marca: ${ownPublications.length}`);
   console.log(`  HTML: ${htmlPath}`);
   console.log(`  XLSX: ${xlsxPath}`);
 }
