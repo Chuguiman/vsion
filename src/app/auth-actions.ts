@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getSession, setSessionCookie, clearSessionCookie } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
-import { countUsers, findByEmail, createUser, verifyPassword, setRole, deleteUser } from "@/lib/users";
+import { countUsers, findByEmail, createUser, verifyPassword, setRole, deleteUser, updateName, updateAvatar, changePassword } from "@/lib/users";
 
 type Res = { ok: boolean; error?: string };
 
@@ -84,6 +84,39 @@ export async function deleteUserAction(userId: number): Promise<Res> {
     const s = await requireSuperadmin();
     if (userId === s.userId) return { ok: false, error: "No puedes eliminar tu propia cuenta." };
     await deleteUser(userId);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error." };
+  }
+}
+
+// ── Perfil propio ──
+export async function updateNameAction(name: string): Promise<Res> {
+  const s = await getSession();
+  if (!s) return { ok: false, error: "No autenticado." };
+  if (!name.trim()) return { ok: false, error: "El nombre no puede estar vacío." };
+  try {
+    await updateName(s.userId, name);
+    await setSessionCookie({ ...s, name: name.trim() }); // refresca el nombre en la sesión
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error." };
+  }
+}
+
+export async function changePasswordAction(current: string, next: string): Promise<Res> {
+  const s = await getSession();
+  if (!s) return { ok: false, error: "No autenticado." };
+  return changePassword(s.userId, current, next);
+}
+
+export async function updateAvatarAction(dataUrl: string | null): Promise<Res> {
+  const s = await getSession();
+  if (!s) return { ok: false, error: "No autenticado." };
+  if (dataUrl && dataUrl.length > 400_000) return { ok: false, error: "La imagen es demasiado grande." };
+  if (dataUrl && !/^data:image\/(png|jpeg|webp);base64,/.test(dataUrl)) return { ok: false, error: "Formato de imagen no válido." };
+  try {
+    await updateAvatar(s.userId, dataUrl);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error." };

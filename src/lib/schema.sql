@@ -8,8 +8,10 @@ create table if not exists users (
   password_hash text not null,
   name          text,
   role          text not null default 'user' check (role in ('superadmin','admin','user')),
+  avatar        text,
   created_at    timestamptz not null default now()
 );
+alter table users add column if not exists avatar text;
 
 -- Corrida de comparación (una por gaceta procesada)
 create table if not exists runs (
