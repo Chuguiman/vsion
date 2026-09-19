@@ -48,19 +48,31 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-/** Lista usuarios; si orgId se pasa (admin), filtra por su organización. */
-export async function listUsers(orgId?: number | null): Promise<UserRow[]> {
+/** Todos los usuarios (solo superadmin). */
+export async function listUsers(): Promise<UserRow[]> {
   const db = getDb();
   if (!db) return [];
-  if (orgId == null) return db<UserRow[]>`
+  return db<UserRow[]>`
     SELECT u.id, u.email, u.name, u.role, u.organization_id, o.name AS org_name, u.created_at
     FROM users u LEFT JOIN organizations o ON o.id = u.organization_id
     ORDER BY o.name NULLS FIRST, u.created_at ASC`;
+}
+
+/** Usuarios de UNA organización (para admins). Si orgId es null → vacío. */
+export async function listUsersByOrg(orgId: number | null): Promise<UserRow[]> {
+  const db = getDb();
+  if (!db || orgId == null) return [];
   return db<UserRow[]>`
     SELECT u.id, u.email, u.name, u.role, u.organization_id, o.name AS org_name, u.created_at
     FROM users u LEFT JOIN organizations o ON o.id = u.organization_id
     WHERE u.organization_id = ${orgId}
     ORDER BY u.created_at ASC`;
+}
+
+export async function setUserOrg(userId: number, orgId: number | null): Promise<void> {
+  const db = getDb();
+  if (!db) throw new Error("Sin base de datos.");
+  await db`UPDATE users SET organization_id = ${orgId} WHERE id = ${userId}`;
 }
 
 /** Rol + organización de un usuario (para validaciones server-side). */

@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { getSession, setSessionCookie, clearSessionCookie } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
-import { countUsers, findByEmail, createUser, verifyPassword, setRole, deleteUser, updateName, updateAvatar, changePassword, getUserOrg } from "@/lib/users";
+import { countUsers, findByEmail, createUser, verifyPassword, setRole, deleteUser, updateName, updateAvatar, changePassword, getUserOrg, setUserOrg } from "@/lib/users";
 import { createOrganization } from "@/lib/organizations";
 
 type Res = { ok: boolean; error?: string };
@@ -108,6 +108,17 @@ async function canManageTarget(s: NonNullable<Awaited<ReturnType<typeof getSessi
   if (target.role === "superadmin") return { ok: false, error: "No autorizado." };
   if (s.role === "admin" && target.organization_id !== s.organizationId) return { ok: false, error: "Fuera de tu organización." };
   return { ok: true };
+}
+
+/** Reasignar la organización de un usuario (solo superadmin). */
+export async function setUserOrgAction(userId: number, orgId: number | null): Promise<Res> {
+  const s = await getSession();
+  if (s?.role !== "superadmin") return { ok: false, error: "No autorizado." };
+  if (userId === s.userId) return { ok: false, error: "No puedes cambiar tu propia organización." };
+  const target = await getUserOrg(userId);
+  if (target?.role === "superadmin") return { ok: false, error: "No autorizado." };
+  try { await setUserOrg(userId, orgId); return { ok: true }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Error." }; }
 }
 
 export async function setRoleAction(userId: number, role: Role): Promise<Res> {

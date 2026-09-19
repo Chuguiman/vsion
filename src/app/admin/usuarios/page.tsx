@@ -1,5 +1,5 @@
 import { getSession } from "@/lib/auth";
-import { listUsers } from "@/lib/users";
+import { listUsers, listUsersByOrg } from "@/lib/users";
 import { listOrganizations } from "@/lib/organizations";
 import UsersManager from "@/app/_components/UsersManager";
 
@@ -10,7 +10,7 @@ export default async function UsuariosPage() {
   if (!s) return null;
   const isSuper = s.role === "superadmin";
   const [users, orgs] = await Promise.all([
-    listUsers(isSuper ? null : s.organizationId),
+    isSuper ? listUsers() : listUsersByOrg(s.organizationId),
     isSuper ? listOrganizations() : Promise.resolve([]),
   ]);
   return <UsersManager users={users} orgs={orgs} role={s.role} currentUserId={s.userId} currentOrgId={s.organizationId} />;

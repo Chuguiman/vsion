@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, UserPlus, Trash2, Building2, Copy, Check } from "lucide-react";
-import { createUserAction, setRoleAction, deleteUserAction, createOrgAction } from "../auth-actions";
+import { createUserAction, setRoleAction, deleteUserAction, createOrgAction, setUserOrgAction } from "../auth-actions";
 import type { Role } from "@/lib/auth";
 import type { UserRow } from "@/lib/users";
 import type { Org } from "@/lib/organizations";
@@ -53,6 +53,10 @@ export default function UsersManager({ users, orgs, role, currentUserId, current
   async function remove(id: number) {
     if (!confirm("¿Eliminar esta cuenta?")) return;
     const res = await deleteUserAction(id);
+    if (res.ok) router.refresh(); else setError(res.error ?? "Error");
+  }
+  async function changeOrg(id: number, orgId: string) {
+    const res = await setUserOrgAction(id, orgId ? Number(orgId) : null);
     if (res.ok) router.refresh(); else setError(res.error ?? "Error");
   }
 
@@ -131,7 +135,17 @@ export default function UsersManager({ users, orgs, role, currentUserId, current
                 <tr key={u.id} className="border-b border-[var(--bd)] last:border-0">
                   <td className="px-4 py-2.5">{u.name} {self && <span className="text-[11px] text-[var(--mut)]">(tú)</span>}</td>
                   <td className="px-4 py-2.5 text-[var(--mut)]">{u.email}</td>
-                  {isSuper && <td className="px-4 py-2.5 text-[var(--mut)]">{u.org_name ?? <span className="text-[var(--acc)]">— global</span>}</td>}
+                  {isSuper && (
+                    <td className="px-4 py-2.5">
+                      {u.role === "superadmin" ? <span className="text-[var(--acc)]">— global</span> : (
+                        <select defaultValue={u.organization_id ?? ""} onChange={(e) => changeOrg(u.id, e.target.value)}
+                          className="rounded-md border border-[var(--bd)] bg-[var(--bg)] px-2 py-1 text-xs">
+                          <option value="">Sin organización</option>
+                          {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                        </select>
+                      )}
+                    </td>
+                  )}
                   <td className="px-4 py-2.5">
                     {editable ? (
                       <select defaultValue={u.role} onChange={(e) => changeRole(u.id, e.target.value as Role)} className="rounded-md border border-[var(--bd)] bg-[var(--bg)] px-2 py-1 text-xs">
