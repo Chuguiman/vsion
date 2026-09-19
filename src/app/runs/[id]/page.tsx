@@ -24,9 +24,15 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
 
   return (
     <div>
-      <Link href="/historial" className="mb-4 inline-block text-sm text-[var(--mut)] hover:text-[var(--tx)]">
-        ← Vigilancia
-      </Link>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <Link href="/historial" className="inline-block text-sm text-[var(--mut)] hover:text-[var(--tx)]">
+          ← Vigilancia
+        </Link>
+        <Link href={`/runs/${id}/publicaciones`}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--bd)] px-3 py-1.5 text-sm text-[var(--mut)] hover:text-[var(--tx)]">
+          Ver publicación completa →
+        </Link>
+      </div>
       <Results dto={row.payload} runId={Number(id)} reviews={reviews} canEdit={canEdit} />
     </div>
   );

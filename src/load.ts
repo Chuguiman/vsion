@@ -94,3 +94,47 @@ export function parseGazette(doc: any): { meta: GazetteMeta; entries: GazetteEnt
 export function loadGazette(path: string): { meta: GazetteMeta; entries: GazetteEntry[]; skipped: number } {
   return parseGazette(JSON.parse(readFileSync(path, "utf8")));
 }
+
+export interface PublicationRow {
+  seq: number;
+  denom: string;
+  classes: number[];
+  pys: string;
+  applicant: string;
+  applicantCountry: string;
+  representant: string;
+  applicationNumber: string;
+  applicationDate: string;
+  markType: string;
+  status: string;
+  imageId: string;
+}
+
+/** Todas las publicaciones de la gaceta, incluidas las figurativas (word vacío). */
+export function parseAllPublications(doc: any): PublicationRow[] {
+  const out: PublicationRow[] = [];
+  let seq = 0;
+  for (const d of doc.details ?? []) {
+    const pys = Array.isArray(d.pys)
+      ? d.pys.map((p: any) => `${p.clase ? p.clase + ". " : ""}${p.descripcion ?? ""}`).join(" ").trim()
+      : "";
+    const ap = Array.isArray(d.applicants) && d.applicants[0] ? d.applicants[0] : {};
+    const representant = Array.isArray(d.representants) && d.representants[0]
+      ? String(d.representants[0].representant_name ?? "").trim() : "";
+    out.push({
+      seq: seq++,
+      denom: String(d.word ?? "").trim(),
+      classes: parseClasses(d.clases),
+      pys,
+      applicant: String(ap.aplicantName ?? "").trim(),
+      applicantCountry: String(ap.aplicantCountry ?? "").trim().toUpperCase(),
+      representant,
+      applicationNumber: String(d.applicationNumber ?? "").trim(),
+      applicationDate: String(d.applicationDate ?? "").trim(),
+      markType: String(d.markType ?? "").trim(),
+      status: String(d.markStatus ?? "").trim(),
+      imageId: String(d.image ?? "").trim(),
+    });
+  }
+  return out;
+}

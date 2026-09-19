@@ -111,6 +111,29 @@ create table if not exists watch_marks (
 );
 create index if not exists watch_marks_scope_idx on watch_marks (organization_id, country);
 
+-- Publicación completa de la gaceta (todas las entradas, no solo los matches).
+-- Alimenta el visor paginado y, en Fase B, las imágenes + hash perceptual.
+create table if not exists publications (
+  id                 bigint generated always as identity primary key,
+  run_id             bigint not null,
+  seq                int    not null default 0,   -- orden dentro de la gaceta
+  denom              text   not null default '',  -- vacío = figurativa/3D
+  classes            int[]  not null default '{}',
+  pys                text,
+  applicant          text,
+  applicant_country  text,
+  representant       text,
+  application_number text,
+  application_date   text,
+  mark_type          text,
+  status             text,
+  image_id           text,   -- id de imagen del SIC (p.ej. 0900000282554b53)
+  image_path         text,   -- Fase B: ruta en Supabase Storage
+  image_phash        text,   -- Fase B: hash perceptual
+  created_at         timestamptz not null default now()
+);
+create index if not exists publications_run_idx on publications (run_id, seq);
+
 -- Fase 3: decisión humana por candidato (aprobar / descartar). Tabla aparte
 -- para no colisionar con la escritura del payload de 'runs' durante el análisis.
 create table if not exists reviews (

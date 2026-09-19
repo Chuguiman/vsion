@@ -1,9 +1,10 @@
 "use server";
 
-import { parseClientMarks, parseGazette } from "@/load";
+import { parseClientMarks, parseGazette, parseAllPublications } from "@/load";
 import { sweep } from "@/sweep";
 import { toReportDTO, type ReportDTO } from "@/lib/dto";
 import { getDb } from "@/lib/db";
+import { savePublications } from "@/lib/publications";
 import { importCartera, loadMarksFromDb, getCarteraInfo } from "@/lib/cartera";
 import { analyzeRunBatch, type BatchResult } from "@/lib/ai-web";
 import { setReview, type ReviewStatus } from "@/lib/reviews";
@@ -19,7 +20,7 @@ export interface RunResult {
 }
 
 // Barrido + guardado (compartido por ambos flujos). Recibe la gaceta ya parseada.
-async function sweepAndSave(marks: ClientMark[], parsed: ReturnType<typeof parseGazette>, t0: number): Promise<RunResult> {
+async function sweepAndSave(marks: ClientMark[], parsed: ReturnType<typeof parseGazette>, gazetteDoc: any, t0: number): Promise<RunResult> {
   const { meta, entries, skipped } = parsed;
   const { candidates } = sweep(entries, marks);
   const dto = toReportDTO(candidates, meta, { clientCount: marks.length, gazetteCount: entries.length, skipped });
@@ -40,6 +41,12 @@ async function sweepAndSave(marks: ClientMark[], parsed: ReturnType<typeof parse
         ) RETURNING id
       `;
       runId = row.id;
+      // Guarda la publicación completa (todas las entradas) para el visor paginado.
+      try {
+        await savePublications(runId, parseAllPublications(gazetteDoc));
+      } catch (e) {
+        console.error("[vsion] no se pudieron guardar las publicaciones:", e);
+      }
     } catch (e) {
       console.error("[vsion] no se pudo guardar la corrida:", e);
     }
@@ -66,7 +73,7 @@ export async function runComparison(clientText: string, gazetteText: string): Pr
   }
   if (!Array.isArray(clientRows)) return { ok: false, error: "La cartera debe ser un arreglo JSON (casos.json)." };
   if (!gazetteDoc?.details) return { ok: false, error: "La gaceta no tiene 'details'. ¿Es el JSON correcto?" };
-  return sweepAndSave(parseClientMarks(clientRows), parseGazette(gazetteDoc), t0);
+  return sweepAndSave(parseClientMarks(clientRows), parseGazette(gazetteDoc), gazetteDoc, t0);
 }
 
 /** Compara usando la cartera ya importada en la BD; solo se sube la gaceta. */
@@ -87,7 +94,7 @@ export async function runComparisonFromDb(gazetteText: string): Promise<RunResul
   if (!marks.length) {
     return { ok: false, error: "No hay marcas de cartera para vigilar en este país. Revisa el perfil de vigilancia en Países, o importa la cartera." };
   }
-  return sweepAndSave(marks, parsed, t0);
+  return sweepAndSave(marks, parsed, gazetteDoc, t0);
 }
 
 /** Importa/reemplaza la cartera del cliente en la BD. */
