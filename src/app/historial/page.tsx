@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +25,15 @@ export default async function Historial() {
     );
   }
 
-  const rows = await db<RunRow[]>`
-    SELECT id, country, gazette_number, date_public, n_candidates, n_own, created_at
-    FROM runs ORDER BY created_at DESC LIMIT 100
-  `;
+  const s = await getSession();
+  // superadmin ve todo; los demás solo las corridas de su organización
+  const rows = s?.role === "superadmin"
+    ? await db<RunRow[]>`
+        SELECT id, country, gazette_number, date_public, n_candidates, n_own, created_at
+        FROM runs ORDER BY created_at DESC LIMIT 100`
+    : await db<RunRow[]>`
+        SELECT id, country, gazette_number, date_public, n_candidates, n_own, created_at
+        FROM runs WHERE organization_id = ${s?.organizationId ?? -1} ORDER BY created_at DESC LIMIT 100`;
 
   return (
     <div>

@@ -30,13 +30,15 @@ async function sweepAndSave(marks: ClientMark[], gazetteDoc: any, t0: number): P
   const db = getDb();
   if (db) {
     try {
+      const s = await getSession();
+      const orgId = s?.organizationId ?? null;
       const [row] = await db<{ id: number }[]>`
         INSERT INTO runs (
           country, gazette_number, date_public, date_due, language,
-          client_count, gazette_count, n_candidates, n_own, ai_ran, payload
+          client_count, gazette_count, n_candidates, n_own, ai_ran, payload, organization_id
         ) VALUES (
           ${meta.country}, ${meta.number}, ${meta.datePublic || null}, ${meta.dateDue || null}, ${meta.language},
-          ${marks.length}, ${entries.length}, ${dto.stats.candidates}, ${dto.stats.own}, false, ${db.json(dto as any)}
+          ${marks.length}, ${entries.length}, ${dto.stats.candidates}, ${dto.stats.own}, false, ${db.json(dto as any)}, ${orgId}
         ) RETURNING id
       `;
       runId = row.id;

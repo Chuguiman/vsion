@@ -7,6 +7,7 @@ export interface Session {
   email: string;
   name: string;
   role: Role;
+  organizationId: number | null;
 }
 
 const COOKIE = "vsion_session";
@@ -30,7 +31,11 @@ export async function decryptSession(token?: string): Promise<Session | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, secret());
-    return { userId: Number(payload.userId), email: String(payload.email), name: String(payload.name), role: payload.role as Role };
+    return {
+      userId: Number(payload.userId), email: String(payload.email), name: String(payload.name),
+      role: payload.role as Role,
+      organizationId: payload.organizationId == null ? null : Number(payload.organizationId),
+    };
   } catch {
     return null;
   }

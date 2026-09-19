@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { getAvatar } from "@/lib/users";
 import NavMenu, { type NavLink } from "./_components/NavMenu";
 import ThemeToggle from "./_components/ThemeToggle";
+import "flag-icons/css/flag-icons.min.css";
 import "./globals.css";
 
 const themeScript = `try{if(localStorage.getItem('vsion-theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}`;

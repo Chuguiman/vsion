@@ -13,11 +13,14 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   const db = getDb();
   if (!db) return notFound();
 
-  const [row] = await db<{ payload: ReportDTO }[]>`
-    SELECT payload FROM runs WHERE id = ${Number(id)}
+  const [row] = await db<{ payload: ReportDTO; organization_id: number | null }[]>`
+    SELECT payload, organization_id FROM runs WHERE id = ${Number(id)}
   `;
   if (!row) return notFound();
-  const [reviews, session] = await Promise.all([getReviews(Number(id)), getSession()]);
+  const session = await getSession();
+  // Aislamiento por organización: superadmin ve todo; el resto solo su org.
+  if (session?.role !== "superadmin" && row.organization_id !== (session?.organizationId ?? null)) return notFound();
+  const reviews = await getReviews(Number(id));
   const canEdit = session?.role === "superadmin";
 
   return (

@@ -7,6 +7,8 @@ export interface UserRow {
   email: string;
   name: string;
   role: Role;
+  organization_id: number | null;
+  org_name: string | null;
   created_at: string | Date;
 }
 
@@ -20,20 +22,24 @@ export async function countUsers(): Promise<number> {
 export async function findByEmail(email: string) {
   const db = getDb();
   if (!db) return null;
-  const [u] = await db<{ id: number; email: string; name: string; role: Role; password_hash: string }[]>`
-    SELECT id, email, name, role, password_hash FROM users WHERE lower(email) = lower(${email}) LIMIT 1
+  const [u] = await db<{ id: number; email: string; name: string; role: Role; password_hash: string; organization_id: number | null; must_change: boolean }[]>`
+    SELECT id, email, name, role, password_hash, organization_id, must_change
+    FROM users WHERE lower(email) = lower(${email}) LIMIT 1
   `;
   return u ?? null;
 }
 
-export async function createUser(email: string, password: string, name: string, role: Role): Promise<UserRow> {
+export async function createUser(
+  email: string, password: string, name: string, role: Role,
+  organizationId: number | null = null, mustChange = false
+): Promise<{ id: number }> {
   const db = getDb();
   if (!db) throw new Error("Sin base de datos.");
   const hash = await bcrypt.hash(password, 10);
-  const [u] = await db<UserRow[]>`
-    INSERT INTO users (email, password_hash, name, role)
-    VALUES (${email.trim()}, ${hash}, ${name.trim()}, ${role})
-    RETURNING id, email, name, role, created_at
+  const [u] = await db<{ id: number }[]>`
+    INSERT INTO users (email, password_hash, name, role, organization_id, must_change)
+    VALUES (${email.trim()}, ${hash}, ${name.trim()}, ${role}, ${organizationId}, ${mustChange})
+    RETURNING id
   `;
   return u;
 }
@@ -42,10 +48,29 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export async function listUsers(): Promise<UserRow[]> {
+/** Lista usuarios; si orgId se pasa (admin), filtra por su organización. */
+export async function listUsers(orgId?: number | null): Promise<UserRow[]> {
   const db = getDb();
   if (!db) return [];
-  return db<UserRow[]>`SELECT id, email, name, role, created_at FROM users ORDER BY created_at ASC`;
+  if (orgId == null) return db<UserRow[]>`
+    SELECT u.id, u.email, u.name, u.role, u.organization_id, o.name AS org_name, u.created_at
+    FROM users u LEFT JOIN organizations o ON o.id = u.organization_id
+    ORDER BY o.name NULLS FIRST, u.created_at ASC`;
+  return db<UserRow[]>`
+    SELECT u.id, u.email, u.name, u.role, u.organization_id, o.name AS org_name, u.created_at
+    FROM users u LEFT JOIN organizations o ON o.id = u.organization_id
+    WHERE u.organization_id = ${orgId}
+    ORDER BY u.created_at ASC`;
+}
+
+/** Rol + organización de un usuario (para validaciones server-side). */
+export async function getUserOrg(userId: number): Promise<{ role: Role; organization_id: number | null } | null> {
+  const db = getDb();
+  if (!db) return null;
+  const [u] = await db<{ role: Role; organization_id: number | null }[]>`
+    SELECT role, organization_id FROM users WHERE id = ${userId}
+  `;
+  return u ?? null;
 }
 
 export async function setRole(userId: number, role: Role): Promise<void> {

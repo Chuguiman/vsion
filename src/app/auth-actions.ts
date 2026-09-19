@@ -3,9 +3,19 @@
 import { redirect } from "next/navigation";
 import { getSession, setSessionCookie, clearSessionCookie } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
-import { countUsers, findByEmail, createUser, verifyPassword, setRole, deleteUser, updateName, updateAvatar, changePassword } from "@/lib/users";
+import { countUsers, findByEmail, createUser, verifyPassword, setRole, deleteUser, updateName, updateAvatar, changePassword, getUserOrg } from "@/lib/users";
+import { createOrganization } from "@/lib/organizations";
 
 type Res = { ok: boolean; error?: string };
+
+function tempPassword(len = 10): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let out = "";
+  const arr = new Uint32Array(len);
+  crypto.getRandomValues(arr);
+  for (let i = 0; i < len; i++) out += chars[arr[i] % chars.length];
+  return out;
+}
 
 /** Registro. Bootstrap: si no hay usuarios, el primero es superadmin; luego cerrado. */
 export async function registerAction(email: string, password: string, name: string): Promise<Res> {
@@ -16,8 +26,8 @@ export async function registerAction(email: string, password: string, name: stri
     const n = await countUsers();
     if (n > 0) return { ok: false, error: "El registro está cerrado. Pide a un administrador que cree tu cuenta." };
     if (await findByEmail(email)) return { ok: false, error: "Ese email ya está registrado." };
-    const user = await createUser(email, password, name, "superadmin"); // primer usuario = superadmin
-    await setSessionCookie({ userId: user.id, email: user.email, name: user.name, role: user.role });
+    const user = await createUser(email, password, name, "superadmin"); // primer usuario = superadmin (org null)
+    await setSessionCookie({ userId: user.id, email, name: name.trim(), role: "superadmin", organizationId: null });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al registrar." };
@@ -31,7 +41,7 @@ export async function loginAction(email: string, password: string): Promise<Res>
     if (!u || !(await verifyPassword(password, u.password_hash))) {
       return { ok: false, error: "Email o contraseña incorrectos." };
     }
-    await setSessionCookie({ userId: u.id, email: u.email, name: u.name, role: u.role });
+    await setSessionCookie({ userId: u.id, email: u.email, name: u.name, role: u.role, organizationId: u.organization_id ?? null });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al iniciar sesión." };
@@ -48,46 +58,75 @@ export async function registrationOpen(): Promise<boolean> {
   return (await countUsers()) === 0;
 }
 
-// ── Gestión de usuarios (solo superadmin) ──
-async function requireSuperadmin() {
+// ── Organizaciones (solo superadmin) ──
+export async function createOrgAction(name: string): Promise<Res & { id?: number }> {
   const s = await getSession();
-  if (s?.role !== "superadmin") throw new Error("No autorizado.");
-  return s;
-}
-
-export async function createUserAction(email: string, password: string, name: string, role: Role): Promise<Res> {
+  if (s?.role !== "superadmin") return { ok: false, error: "No autorizado." };
+  if (!name.trim()) return { ok: false, error: "Nombre requerido." };
   try {
-    await requireSuperadmin();
-    if (role === "superadmin") return { ok: false, error: "No se puede crear otro superadmin desde aquí." };
-    if (!email.trim() || !name.trim() || password.length < 8) return { ok: false, error: "Datos incompletos (contraseña ≥ 8)." };
-    if (await findByEmail(email)) return { ok: false, error: "Ese email ya existe." };
-    await createUser(email, password, name, role);
-    return { ok: true };
+    const o = await createOrganization(name);
+    return { ok: true, id: o.id };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error." };
   }
+}
+
+// ── Gestión de usuarios (superadmin global, admin dentro de su organización) ──
+/** Crea un usuario con contraseña temporal (que se devuelve una sola vez). */
+export async function createUserAction(input: { email: string; name: string; role: Role; organizationId: number | null }): Promise<Res & { tempPassword?: string }> {
+  const s = await getSession();
+  if (!s) return { ok: false, error: "No autenticado." };
+  if (s.role !== "superadmin" && s.role !== "admin") return { ok: false, error: "No autorizado." };
+  if (input.role === "superadmin") return { ok: false, error: "No se puede crear un superadmin." };
+
+  // El admin solo crea en SU organización
+  let orgId = input.organizationId;
+  if (s.role === "admin") {
+    orgId = s.organizationId ?? null;
+    if (orgId == null) return { ok: false, error: "Tu cuenta no tiene organización." };
+  } else {
+    // superadmin: debe elegir organización para admin/user
+    if (orgId == null) return { ok: false, error: "Elige una organización." };
+  }
+
+  if (!input.email.trim() || !input.name.trim()) return { ok: false, error: "Nombre y email requeridos." };
+  if (await findByEmail(input.email)) return { ok: false, error: "Ese email ya existe." };
+  try {
+    const pw = tempPassword();
+    await createUser(input.email, pw, input.name, input.role, orgId, true); // must_change = true
+    return { ok: true, tempPassword: pw };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error." };
+  }
+}
+
+// El admin solo puede tocar usuarios de su propia organización (no superadmins).
+async function canManageTarget(s: NonNullable<Awaited<ReturnType<typeof getSession>>>, userId: number): Promise<Res> {
+  if (userId === s.userId) return { ok: false, error: "No puedes modificar tu propia cuenta aquí." };
+  const target = await getUserOrg(userId);
+  if (!target) return { ok: false, error: "Usuario no encontrado." };
+  if (target.role === "superadmin") return { ok: false, error: "No autorizado." };
+  if (s.role === "admin" && target.organization_id !== s.organizationId) return { ok: false, error: "Fuera de tu organización." };
+  return { ok: true };
 }
 
 export async function setRoleAction(userId: number, role: Role): Promise<Res> {
-  try {
-    const s = await requireSuperadmin();
-    if (userId === s.userId) return { ok: false, error: "No puedes cambiar tu propio rol." };
-    await setRole(userId, role);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error." };
-  }
+  const s = await getSession();
+  if (!s || (s.role !== "superadmin" && s.role !== "admin")) return { ok: false, error: "No autorizado." };
+  if (role === "superadmin") return { ok: false, error: "Rol no permitido." };
+  const chk = await canManageTarget(s, userId);
+  if (!chk.ok) return chk;
+  try { await setRole(userId, role); return { ok: true }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Error." }; }
 }
 
 export async function deleteUserAction(userId: number): Promise<Res> {
-  try {
-    const s = await requireSuperadmin();
-    if (userId === s.userId) return { ok: false, error: "No puedes eliminar tu propia cuenta." };
-    await deleteUser(userId);
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "Error." };
-  }
+  const s = await getSession();
+  if (!s || (s.role !== "superadmin" && s.role !== "admin")) return { ok: false, error: "No autorizado." };
+  const chk = await canManageTarget(s, userId);
+  if (!chk.ok) return chk;
+  try { await deleteUser(userId); return { ok: true }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : "Error." }; }
 }
 
 // ── Perfil propio ──
