@@ -111,7 +111,7 @@ export async function carteraInfoAction() {
 /** Fase 2: analiza un lote de conflictos con IA y persiste. El cliente llama en bucle. */
 export async function analyzeBatchAction(runId: number, batchSize = 15): Promise<BatchResult> {
   const s = await getSession();
-  if (s?.role !== "superadmin") return { ok: false, error: "No autorizado.", analyzed: 0, total: 0, remaining: 0 };
+  if (!s) return { ok: false, error: "No autenticado.", analyzed: 0, total: 0, remaining: 0 };
   return analyzeRunBatch(runId, batchSize);
 }
 
@@ -119,7 +119,7 @@ export async function analyzeBatchAction(runId: number, batchSize = 15): Promise
 export async function setReviewAction(runId: number, candKey: string, status: ReviewStatus | null): Promise<{ ok: boolean; error?: string }> {
   try {
     const s = await getSession();
-    if (s?.role !== "superadmin") return { ok: false, error: "No autorizado." };
+    if (!s) return { ok: false, error: "No autenticado." };
     await setReview(runId, candKey, status);
     return { ok: true };
   } catch (e) {

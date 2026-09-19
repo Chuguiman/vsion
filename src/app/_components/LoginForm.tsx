@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Mail, Lock, Loader2, ArrowRight, Search } from "lucide-react";
+import { Mail, Lock, Loader2, ArrowRight, Search, Eye, EyeOff } from "lucide-react";
 import { loginAction } from "../auth-actions";
 import LoginArt from "./LoginArt";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,8 +77,12 @@ export default function LoginForm() {
               <label className="ml-1 text-sm font-medium text-[var(--mut)]">Contraseña</label>
               <div className="group relative">
                 <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--mut)] transition-colors group-focus-within:text-[var(--acc)]"><Lock size={18} /></div>
-                <input type="password" required autoComplete="current-password" placeholder="••••••••"
-                  value={password} onChange={(e) => setPassword(e.target.value)} className={input} />
+                <input type={show ? "text" : "password"} required autoComplete="current-password" placeholder="••••••••"
+                  value={password} onChange={(e) => setPassword(e.target.value)} className={`${input} pr-11`} />
+                <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? "Ocultar contraseña" : "Ver contraseña"}
+                  className="absolute inset-y-0 right-0 flex items-center pr-4 text-[var(--mut)] hover:text-[var(--tx)]">
+                  {show ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
               </div>
             </div>
 

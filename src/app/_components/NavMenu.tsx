@@ -38,7 +38,7 @@ export default function NavMenu({ links, userName, role, avatar }: { links: NavL
       </nav>
       <div className="ml-auto hidden items-center gap-2 text-xs text-[var(--mut)] sm:flex">
         <Avatar size={26} />
-        <span>{userName} · <span className="text-[var(--acc)]">{role}</span></span>
+        <span>{userName}</span>
         <LogoutForm />
       </div>
 
@@ -53,7 +53,7 @@ export default function NavMenu({ links, userName, role, avatar }: { links: NavL
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-0 h-full w-72 max-w-[80%] border-l border-[var(--bd)] bg-[var(--bg2)] p-4">
             <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm"><Avatar size={28} /> <span>{userName} · <span className="text-[var(--acc)]">{role}</span></span></div>
+              <div className="flex items-center gap-2 text-sm"><Avatar size={28} /> <span>{userName}</span></div>
               <button onClick={() => setOpen(false)} aria-label="Cerrar"><X size={20} /></button>
             </div>
             <nav className="flex flex-col gap-1">
