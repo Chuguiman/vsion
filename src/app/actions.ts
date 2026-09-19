@@ -18,11 +18,9 @@ export interface RunResult {
   elapsedMs?: number;
 }
 
-// Barrido + guardado (compartido por ambos flujos)
-async function sweepAndSave(marks: ClientMark[], gazetteDoc: any, t0: number): Promise<RunResult> {
-  if (!gazetteDoc?.details) return { ok: false, error: "La gaceta no tiene 'details'. ¿Es el JSON correcto?" };
-
-  const { meta, entries, skipped } = parseGazette(gazetteDoc);
+// Barrido + guardado (compartido por ambos flujos). Recibe la gaceta ya parseada.
+async function sweepAndSave(marks: ClientMark[], parsed: ReturnType<typeof parseGazette>, t0: number): Promise<RunResult> {
+  const { meta, entries, skipped } = parsed;
   const { candidates } = sweep(entries, marks);
   const dto = toReportDTO(candidates, meta, { clientCount: marks.length, gazetteCount: entries.length, skipped });
 
@@ -67,7 +65,8 @@ export async function runComparison(clientText: string, gazetteText: string): Pr
     return { ok: false, error: "Alguno de los archivos no es JSON válido." };
   }
   if (!Array.isArray(clientRows)) return { ok: false, error: "La cartera debe ser un arreglo JSON (casos.json)." };
-  return sweepAndSave(parseClientMarks(clientRows), gazetteDoc, t0);
+  if (!gazetteDoc?.details) return { ok: false, error: "La gaceta no tiene 'details'. ¿Es el JSON correcto?" };
+  return sweepAndSave(parseClientMarks(clientRows), parseGazette(gazetteDoc), t0);
 }
 
 /** Compara usando la cartera ya importada en la BD; solo se sube la gaceta. */
@@ -80,9 +79,15 @@ export async function runComparisonFromDb(gazetteText: string): Promise<RunResul
   } catch {
     return { ok: false, error: "La gaceta no es JSON válido." };
   }
-  const marks = await loadMarksFromDb();
-  if (!marks.length) return { ok: false, error: "No hay cartera importada. Ve a Cartera e impórtala primero." };
-  return sweepAndSave(marks, gazetteDoc, t0);
+  if (!gazetteDoc?.details) return { ok: false, error: "La gaceta no tiene 'details'. ¿Es el JSON correcto?" };
+  const parsed = parseGazette(gazetteDoc);
+  const s = await getSession();
+  // Aplica el perfil de vigilancia del país de la gaceta (subconjunto de la cartera).
+  const marks = await loadMarksFromDb({ orgId: s?.organizationId ?? null, country: parsed.meta.country });
+  if (!marks.length) {
+    return { ok: false, error: "No hay marcas de cartera para vigilar en este país. Revisa el perfil de vigilancia en Países, o importa la cartera." };
+  }
+  return sweepAndSave(marks, parsed, t0);
 }
 
 /** Importa/reemplaza la cartera del cliente en la BD. */

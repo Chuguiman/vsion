@@ -1,13 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, Plus, X } from "lucide-react";
+import { Search, Plus, X, SlidersHorizontal, ChevronDown } from "lucide-react";
 import { setMonitoredAction } from "../paises-actions";
+import ScopePanel from "./ScopePanel";
 import type { CountryRow } from "@/lib/countries";
 
 export default function PaisesClient({ countries }: { countries: CountryRow[] }) {
   const [rows, setRows] = useState(countries);
   const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState<number | null>(null);
 
   const active = useMemo(() => rows.filter((c) => c.is_active).sort((a, b) => a.name.localeCompare(b.name)), [rows]);
   const matches = useMemo(() => {
@@ -59,17 +61,32 @@ export default function PaisesClient({ countries }: { countries: CountryRow[] })
           Aún no monitoreas ningún país. Búscalo arriba y agrégalo.
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {active.map((c) => (
-            <div key={c.id} className="flex items-center gap-3 rounded-xl border border-[var(--acc)] bg-[color-mix(in_srgb,var(--acc)_10%,transparent)] px-3 py-2.5">
-              <span className={`fi fi-${c.iso2.toLowerCase()} shrink-0 rounded-sm`} style={{ width: 24, height: 18 }} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{c.name}</span>
-                <span className="text-[11px] text-[var(--mut)]">{c.iso2} · {c.region || "—"}</span>
-              </span>
-              <button onClick={() => setActive(c, false)} title="Quitar" className="text-[var(--mut)] hover:text-red-400"><X size={16} /></button>
-            </div>
-          ))}
+        <div className="space-y-2">
+          {active.map((c) => {
+            const open = openId === c.id;
+            return (
+              <div key={c.id} className="overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
+                <div className="flex items-center gap-3 px-3 py-2.5">
+                  <span className={`fi fi-${c.iso2.toLowerCase()} shrink-0 rounded-sm`} style={{ width: 24, height: 18 }} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{c.name}</span>
+                    <span className="text-[11px] text-[var(--mut)]">{c.iso2} · {c.region || "—"}</span>
+                  </span>
+                  <button onClick={() => setOpenId(open ? null : c.id)}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition ${open ? "border-[var(--acc)] text-[var(--acc)]" : "border-[var(--bd)] text-[var(--mut)] hover:text-[var(--tx)]"}`}>
+                    <SlidersHorizontal size={13} /> Vigilancia
+                    <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+                  </button>
+                  <button onClick={() => setActive(c, false)} title="Quitar" className="text-[var(--mut)] hover:text-red-400"><X size={16} /></button>
+                </div>
+                {open && (
+                  <div className="border-t border-[var(--bd)] bg-[var(--bg)]">
+                    <ScopePanel country={c.iso2} name={c.name} />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

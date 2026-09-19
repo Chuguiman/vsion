@@ -90,6 +90,27 @@ alter table client_marks add column if not exists valid_until text;
 alter table client_marks add column if not exists register_date text;
 create index if not exists client_marks_denom_idx on client_marks (denom);
 
+-- Perfil de vigilancia por (organización, país de gaceta). Define qué
+-- subconjunto de la cartera se compara en ese país. Sin fila => cartera completa.
+create table if not exists watch_scopes (
+  organization_id bigint not null,          -- 0 = global (superadmin)
+  country         text   not null,          -- código de país de la gaceta (CO, MX, PE, BR)
+  mode            text   not null default 'all' check (mode in ('all','include','exclude')),
+  holders         text[] not null default '{}',   -- titulares/solicitantes
+  case_ids        text[] not null default '{}',   -- expedientes/solicitudes (case_id o code)
+  updated_at      timestamptz not null default now(),
+  primary key (organization_id, country)
+);
+
+-- Selección manual de marcas de la cartera para un país.
+create table if not exists watch_marks (
+  organization_id bigint not null,
+  country         text   not null,
+  mark_id         bigint not null references client_marks(id) on delete cascade,
+  primary key (organization_id, country, mark_id)
+);
+create index if not exists watch_marks_scope_idx on watch_marks (organization_id, country);
+
 -- Fase 3: decisión humana por candidato (aprobar / descartar). Tabla aparte
 -- para no colisionar con la escritura del payload de 'runs' durante el análisis.
 create table if not exists reviews (
