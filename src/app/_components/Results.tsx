@@ -11,14 +11,18 @@ import CandCard from "./CandCard";
 
 const C = { red: "#ef4444", amber: "#f59e0b", blue: "#3b82f6", violet: "#8b5cf6", muted: "#71717a", green: "#10b981" };
 
-type Filter = Relation | "all" | "ai_selected";
+type Filter = Relation | "all" | "ai_selected" | "opp" | "mon" | "no";
 type ReviewFilter = "pending" | ReviewStatus | "all";
 
 function matchesFilter(c: CandDTO, filter: Filter): boolean {
-  if (filter === "ai_selected") {
-    return c.relation === "conflict" && (c.ai?.recommendation === "file_opposition" || c.ai?.recommendation === "monitor_closely");
+  switch (filter) {
+    case "all": return true;
+    case "ai_selected": return c.relation === "conflict" && (c.ai?.recommendation === "file_opposition" || c.ai?.recommendation === "monitor_closely");
+    case "opp": return c.relation === "conflict" && c.ai?.recommendation === "file_opposition";
+    case "mon": return c.relation === "conflict" && c.ai?.recommendation === "monitor_closely";
+    case "no":  return c.relation === "conflict" && c.ai?.recommendation === "no_action";
+    default:    return c.relation === filter; // conflict | firm | own
   }
-  return filter === "all" || c.relation === filter;
 }
 
 const REL_LABEL: Record<Relation, string> = { conflict: "Conflicto", firm: "Presentada por tu firma", own: "Tu marca (aviso)" };
@@ -180,7 +184,8 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
 
   const analyzedCount = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai).length, 0);
   const analysisComplete = stats.conflict > 0 && analyzedCount >= stats.conflict;
-  const filter = selectedFilter ?? (analysisComplete ? "ai_selected" : "conflict");
+  const showAiKpis = analyzedCount > 0;
+  const filter = selectedFilter ?? (showAiKpis ? "ai_selected" : "conflict");
   const nApproved = Object.values(reviews).filter((s) => s === "approved").length;
   const nDiscarded = Object.values(reviews).filter((s) => s === "discarded").length;
 
@@ -242,7 +247,6 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
   })).filter((g) => g.candidates.length > 0);
   const nOpp = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai?.recommendation === "file_opposition").length, 0);
   const nMon = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai?.recommendation === "monitor_closely").length, 0);
-  const showAiKpis = analyzedCount > 0;
 
   // Conjunto aprobado (independiente del filtro actual) → base del export
   const approvedGroups = groups
@@ -270,16 +274,12 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
 
   const nNo = Math.max(0, analyzedCount - nOpp - nMon);
   const distro: Seg[] = showAiKpis
-    ? [{ label: "Oponerse", value: nOpp, color: C.red }, { label: "Vigilar", value: nMon, color: C.amber }, { label: "Sin acción", value: nNo, color: C.muted }]
-    : [{ label: "Conflicto", value: stats.conflict, color: C.red }, { label: "Tu firma", value: stats.firm, color: C.violet }, { label: "Tu marca", value: stats.own, color: C.blue }];
+    ? [{ id: "opp", label: "Oponerse", value: nOpp, color: C.red }, { id: "mon", label: "Vigilar", value: nMon, color: C.amber }, { id: "no", label: "Sin acción", value: nNo, color: C.muted }]
+    : [{ id: "conflict", label: "Conflicto", value: stats.conflict, color: C.red }, { id: "firm", label: "Tu firma", value: stats.firm, color: C.violet }, { id: "own", label: "Tu marca", value: stats.own, color: C.blue }];
 
-  const viewOptions: { id: Filter; label: string }[] = [
-    ...(showAiKpis ? [{ id: "ai_selected" as Filter, label: `Seleccionados por IA (${nOpp + nMon})` }] : []),
-    { id: "conflict", label: `Conflictos (${stats.conflict})` },
-    { id: "firm", label: `Tu firma (${stats.firm})` },
-    { id: "own", label: `Tu marca (${stats.own})` },
-    { id: "all", label: "Todas" },
-  ];
+  const distroIds = new Set(distro.map((s) => s.id));
+  const activeId = distroIds.has(filter) ? filter : null;
+  const onSelectSeg = (id: string) => setFilter(id === "__reset__" || id === filter ? null : (id as Filter));
 
   return (
     <div>
@@ -292,7 +292,7 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
             <span className="ml-auto flex items-baseline gap-1.5"><span className="text-lg font-bold text-emerald-300">{approvedCount}</span><span className="text-xs text-[var(--mut)]">aprobadas</span></span>
           )}
         </div>
-        <BarcodeStat segments={distro} />
+        <BarcodeStat segments={distro} activeId={activeId} onSelect={onSelectSeg} />
       </div>
 
       {/* Barra de IA (solo superadmin, mientras falte analizar) */}
@@ -321,16 +321,8 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
         </div>
       )}
 
-      {/* Toolbar único: Mostrar · Estado de revisión · Exportar */}
+      {/* Toolbar: estado de revisión · Exportar (el filtro de vista es el widget de arriba) */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm text-[var(--mut)]">
-          Mostrar
-          <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}
-            className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-1.5 text-sm text-[var(--tx)] outline-none focus:border-[var(--acc)]">
-            {viewOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-          </select>
-        </label>
-
         {reviewable && (
           <div className="inline-flex overflow-hidden rounded-lg border border-[var(--bd)] text-sm">
             {([["pending", "Pendientes"], ["approved", "Aprobadas"], ["discarded", "Descartadas"], ["all", "Todas"]] as const).map(([id, label]) => (
