@@ -6,6 +6,10 @@ import { BrainCircuit, Loader2, Check, X, Download, ChevronDown } from "lucide-r
 import type { ReportDTO, PubDTO, CandDTO, Relation, AiVerdict } from "@/lib/dto";
 import { analyzeBatchAction, setReviewAction } from "../actions";
 import type { ReviewStatus } from "@/lib/reviews";
+import BarcodeStat, { type Seg } from "./BarcodeStat";
+import CandCard from "./CandCard";
+
+const C = { red: "#ef4444", amber: "#f59e0b", blue: "#3b82f6", violet: "#8b5cf6", muted: "#71717a", green: "#10b981" };
 
 type Filter = Relation | "all" | "ai_selected";
 type ReviewFilter = "pending" | ReviewStatus | "all";
@@ -81,7 +85,7 @@ function ReviewCell({ status, onSet }: { status?: ReviewStatus; onSet: (s: Revie
         <Check size={15} />
       </button>
       <button title={status === "discarded" ? "Devolver a pendientes" : "Descartar"} onClick={() => onSet(status === "discarded" ? null : "discarded")}
-        className={`${base} ${status === "discarded" ? "border-yellow-500 bg-yellow-500/20 text-yellow-300" : "border-[var(--bd)] text-[var(--mut)] hover:text-[var(--tx)]"}`}>
+        className={`${base} ${status === "discarded" ? "border-red-500 bg-red-500/20 text-red-300" : "border-[var(--bd)] text-[var(--mut)] hover:text-[var(--tx)]"}`}>
         <X size={15} />
       </button>
     </div>
@@ -130,7 +134,8 @@ function Pub({ g, filter, reviewable, reviews, onReview }: {
           {g.representant && <span>Apoderado gaceta: <span className="font-medium text-teal-300">{g.representant}</span></span>}
         </div>
       </header>
-      <table className="w-full text-left">
+      {/* Desktop: tabla densa */}
+      <table className="hidden w-full text-left sm:table">
         <thead>
           <tr className="text-[11px] uppercase tracking-wide text-[var(--mut)]">
             <th className="px-4 py-2 font-medium">Score</th>
@@ -144,6 +149,15 @@ function Pub({ g, filter, reviewable, reviews, onReview }: {
           <Row key={candKeyOf(g, c)} c={c} pub={g} reviewable={reviewable} status={reviews[candKeyOf(g, c)]} onReview={onReview} />
         ))}</tbody>
       </table>
+
+      {/* Móvil: tarjetas (swipe para aprobar/descartar) */}
+      <div className="space-y-2 p-3 sm:hidden">
+        {reviewable && <p className="text-[11px] text-[var(--mut)]">Desliza → aprobar · ← descartar</p>}
+        {rows.map((c) => (
+          <CandCard key={candKeyOf(g, c)} c={c} candKey={candKeyOf(g, c)} reviewable={reviewable}
+            status={reviews[candKeyOf(g, c)]} onReview={onReview} />
+        ))}
+      </div>
     </section>
   );
 }
@@ -254,6 +268,11 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
     }
   }
 
+  const nNo = Math.max(0, analyzedCount - nOpp - nMon);
+  const distro: Seg[] = showAiKpis
+    ? [{ label: "Oponerse", value: nOpp, color: C.red }, { label: "Vigilar", value: nMon, color: C.amber }, { label: "Sin acción", value: nNo, color: C.muted }]
+    : [{ label: "Conflicto", value: stats.conflict, color: C.red }, { label: "Tu firma", value: stats.firm, color: C.violet }, { label: "Tu marca", value: stats.own, color: C.blue }];
+
   const viewOptions: { id: Filter; label: string }[] = [
     ...(showAiKpis ? [{ id: "ai_selected" as Filter, label: `Seleccionados por IA (${nOpp + nMon})` }] : []),
     { id: "conflict", label: `Conflictos (${stats.conflict})` },
@@ -264,17 +283,16 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
 
   return (
     <div>
-      {/* Encabezado: estadísticas compactas + meta de gaceta */}
-      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-[var(--bd)] pb-3">
-        {showAiKpis
-          ? (<><Stat n={nOpp} label="Oponerse" accent="red" /><Stat n={nMon} label="Vigilar" accent="amber" /></>)
-          : <Stat n={stats.conflict} label="Conflictos" accent="red" />}
-        <Stat n={stats.firm} label="Tu firma" accent="violet" />
-        <Stat n={stats.own} label="Tu marca" accent="blue" />
-        {reviewable && approvedCount > 0 && <Stat n={approvedCount} label="Aprobadas" accent="green" />}
-        <span className="ml-auto text-xs text-[var(--mut)]">
-          Gaceta {meta.country}{meta.number} · {meta.datePublic} · oposición hasta {meta.dateDue}
-        </span>
+      {/* Widget de distribución + meta de gaceta */}
+      <div className="mb-4">
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-3">
+          <h2 className="text-base font-semibold">Gaceta {meta.country}{meta.number}</h2>
+          <span className="text-xs text-[var(--mut)]">{meta.datePublic} · oposición hasta {meta.dateDue}</span>
+          {reviewable && approvedCount > 0 && (
+            <span className="ml-auto flex items-baseline gap-1.5"><span className="text-lg font-bold text-emerald-300">{approvedCount}</span><span className="text-xs text-[var(--mut)]">aprobadas</span></span>
+          )}
+        </div>
+        <BarcodeStat segments={distro} />
       </div>
 
       {/* Barra de IA (solo superadmin, mientras falte analizar) */}
@@ -340,22 +358,6 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
       {visible.length ? visible.map((g) => (
         <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} />
       )) : <p className="text-[var(--mut)]">Sin resultados para este filtro.</p>}
-    </div>
-  );
-}
-
-type Accent = "red" | "violet" | "blue" | "amber" | "green" | "mut";
-const ACCENT_TX: Record<Accent, string> = {
-  red: "text-red-300", amber: "text-amber-300", violet: "text-violet-300",
-  blue: "text-blue-300", green: "text-emerald-300", mut: "text-[var(--tx)]",
-};
-
-/** Estadística compacta en línea (número + etiqueta), sin tile pesado. */
-function Stat({ n, label, accent = "mut" }: { n: number; label: string; accent?: Accent }) {
-  return (
-    <div className="flex items-baseline gap-1.5">
-      <span className={`text-lg font-bold ${ACCENT_TX[accent]}`}>{n}</span>
-      <span className="text-xs text-[var(--mut)]">{label}</span>
     </div>
   );
 }
