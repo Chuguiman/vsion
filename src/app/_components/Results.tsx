@@ -2,19 +2,13 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BrainCircuit, Loader2, Check, X, Download } from "lucide-react";
+import { BrainCircuit, Loader2, Check, X, Download, ChevronDown } from "lucide-react";
 import type { ReportDTO, PubDTO, CandDTO, Relation, AiVerdict } from "@/lib/dto";
 import { analyzeBatchAction, setReviewAction } from "../actions";
 import type { ReviewStatus } from "@/lib/reviews";
 
 type Filter = Relation | "all" | "ai_selected";
 type ReviewFilter = "pending" | ReviewStatus | "all";
-const REVIEW_COLORS: Record<ReviewFilter, { active: string; inactive: string }> = {
-  pending: { active: "border-violet-400 bg-violet-500/15 text-violet-300", inactive: "border-violet-500/30 text-violet-300 hover:bg-violet-500/10" },
-  approved: { active: "border-emerald-400 bg-emerald-500/15 text-emerald-300", inactive: "border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10" },
-  discarded: { active: "border-yellow-400 bg-yellow-500/15 text-yellow-300", inactive: "border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10" },
-  all: { active: "border-[var(--acc)] text-[var(--acc)]", inactive: "border-[var(--bd)] text-[var(--tx)]" },
-};
 
 function matchesFilter(c: CandDTO, filter: Filter): boolean {
   if (filter === "ai_selected") {
@@ -222,13 +216,6 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
     }
   }
 
-  const Btn = ({ id, label }: { id: Filter; label: string }) => (
-    <button onClick={() => setFilter(id)} aria-pressed={filter === id}
-      className={`rounded-lg border px-3 py-1.5 text-sm ${filter === id ? "border-[var(--acc)] text-[var(--acc)]" : "border-[var(--bd)] text-[var(--tx)]"} bg-[var(--bg2)]`}>
-      {label}
-    </button>
-  );
-
   const matchingGroups = groups.map((g) => ({ ...g, candidates: g.candidates.filter((c) => matchesFilter(c, filter)) }));
   const reviewCounts = { pending: 0, approved: 0, discarded: 0, all: 0 };
   for (const g of matchingGroups) for (const c of g.candidates) {
@@ -243,13 +230,19 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
   const nMon = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai?.recommendation === "monitor_closely").length, 0);
   const showAiKpis = analyzedCount > 0;
 
+  // Conjunto aprobado (independiente del filtro actual) → base del export
+  const approvedGroups = groups
+    .map((g) => ({ ...g, candidates: g.candidates.filter((c) => reviews[candKeyOf(g, c)] === "approved") }))
+    .filter((g) => g.candidates.length > 0);
+  const approvedCount = approvedGroups.reduce((a, g) => a + g.candidates.length, 0);
+
   async function exportApproved(format: "pdf" | "pdf_full" | "xlsx") {
-    if (reviewFilter !== "approved" || !visible.length || savingReviews.current.size || exporting) return;
+    if (!approvedGroups.length || savingReviews.current.size || exporting) return;
     setExporting(format);
     setExportError(null);
     try {
       const { createApprovedExcel, createApprovedPdf, createFichasPdf, downloadExport } = await import("@/lib/review-export");
-      const blob = await (format === "pdf" ? createApprovedPdf : format === "pdf_full" ? createFichasPdf : createApprovedExcel)(visible, meta);
+      const blob = await (format === "pdf" ? createApprovedPdf : format === "pdf_full" ? createFichasPdf : createApprovedExcel)(approvedGroups, meta);
       const gazette = `${meta.country}${meta.number}`.replace(/[^a-zA-Z0-9_-]/g, "_");
       const ext = format === "xlsx" ? "xlsx" : "pdf";
       const suffix = format === "pdf_full" ? "aprobadas-fichas" : "aprobadas";
@@ -261,37 +254,48 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
     }
   }
 
+  const viewOptions: { id: Filter; label: string }[] = [
+    ...(showAiKpis ? [{ id: "ai_selected" as Filter, label: `Seleccionados por IA (${nOpp + nMon})` }] : []),
+    { id: "conflict", label: `Conflictos (${stats.conflict})` },
+    { id: "firm", label: `Tu firma (${stats.firm})` },
+    { id: "own", label: `Tu marca (${stats.own})` },
+    { id: "all", label: "Todas" },
+  ];
+
   return (
     <div>
-      <div className="mb-4 flex flex-wrap gap-3">
-        {showAiKpis ? (<><Kpi n={nOpp} label="Oponerse" accent="red" /><Kpi n={nMon} label="Vigilar" accent="amber" /></>)
-          : <Kpi n={stats.conflict} label="Conflictos" accent="red" />}
-        <Kpi n={stats.firm} label="Presentadas por tu firma" accent="violet" />
-        <Kpi n={stats.own} label="Tu marca (aviso)" accent="blue" />
-        {reviewable && (nApproved + nDiscarded > 0)
-          ? <Kpi n={nApproved} label={`Aprobadas · ${nDiscarded} descartadas`} accent="green" />
-          : <Kpi n={stats.clientCount} label="Marcas cliente" />}
+      {/* Encabezado: estadísticas compactas + meta de gaceta */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-[var(--bd)] pb-3">
+        {showAiKpis
+          ? (<><Stat n={nOpp} label="Oponerse" accent="red" /><Stat n={nMon} label="Vigilar" accent="amber" /></>)
+          : <Stat n={stats.conflict} label="Conflictos" accent="red" />}
+        <Stat n={stats.firm} label="Tu firma" accent="violet" />
+        <Stat n={stats.own} label="Tu marca" accent="blue" />
+        {reviewable && approvedCount > 0 && <Stat n={approvedCount} label="Aprobadas" accent="green" />}
+        <span className="ml-auto text-xs text-[var(--mut)]">
+          Gaceta {meta.country}{meta.number} · {meta.datePublic} · oposición hasta {meta.dateDue}
+        </span>
       </div>
 
+      {/* Barra de IA (solo superadmin, mientras falte analizar) */}
       {runId && canEdit && stats.conflict > 0 && !analysisComplete && (
-        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-4 py-3">
-          <BrainCircuit size={18} className="text-[var(--acc)]" />
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-4 py-2.5">
+          <BrainCircuit size={16} className="text-[var(--acc)]" />
           {ai?.running ? (
             <>
-              <Loader2 size={16} className="animate-spin" />
-              <span className="text-sm">Analizando conflictos con IA… {ai.analyzed}/{ai.total}</span>
+              <Loader2 size={15} className="animate-spin" />
+              <span className="text-sm">Analizando con IA… {ai.analyzed}/{ai.total}</span>
               <div className="ml-2 h-1.5 w-40 overflow-hidden rounded bg-[var(--bd)]">
                 <div className="h-full bg-[var(--acc)]" style={{ width: `${ai.total ? (100 * ai.analyzed) / ai.total : 0}%` }} />
               </div>
             </>
           ) : (
             <>
-              <span className="text-sm">
-                {analyzedCount > 0 ? `IA parcial: ${analyzedCount}/${stats.conflict}. Continuar análisis.`
-                  : `${stats.conflict} conflictos sin analizar. La IA los revisa como un abogado y prioriza.`}
+              <span className="text-sm text-[var(--mut)]">
+                {analyzedCount > 0 ? `IA parcial: ${analyzedCount}/${stats.conflict}` : `${stats.conflict} conflictos sin analizar`}
               </span>
               <button onClick={analyze} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-3 py-1.5 text-sm font-medium text-black">
-                <BrainCircuit size={15} /> {analyzedCount > 0 && analyzedCount < stats.conflict ? "Continuar IA" : "Analizar con IA"}
+                <BrainCircuit size={15} /> {analyzedCount > 0 ? "Continuar IA" : "Analizar con IA"}
               </button>
             </>
           )}
@@ -299,45 +303,39 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {showAiKpis && <Btn id="ai_selected" label={`Seleccionados por IA (${nOpp + nMon})`} />}
-        <Btn id="conflict" label={`Todos los conflictos (${stats.conflict})`} />
-        <Btn id="firm" label={`Tu firma (${stats.firm})`} />
-        <Btn id="own" label={`Tu marca (${stats.own})`} />
-        <Btn id="all" label="Todas" />
-        <span className="ml-auto text-xs text-[var(--mut)]">
-          Gaceta {meta.country}{meta.number} · {meta.datePublic} · oposición hasta {meta.dateDue}
-        </span>
-      </div>
+      {/* Toolbar único: Mostrar · Estado de revisión · Exportar */}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm text-[var(--mut)]">
+          Mostrar
+          <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}
+            className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-1.5 text-sm text-[var(--tx)] outline-none focus:border-[var(--acc)]">
+            {viewOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+          </select>
+        </label>
 
-      {reviewable && (
-        <div className="mb-4 flex flex-wrap gap-2" aria-label="Estado de revisión">
-          {([
-            ["pending", "Pendientes"], ["approved", "Aprobadas"],
-            ["discarded", "Descartadas"], ["all", "Todas las revisiones"],
-          ] as const).map(([id, label]) => (
-            <button key={id} onClick={() => setReviewFilter(id)} aria-pressed={reviewFilter === id}
-              className={`rounded-lg border px-3 py-1.5 text-sm transition ${reviewFilter === id ? REVIEW_COLORS[id].active : REVIEW_COLORS[id].inactive}`}>
-              {label} ({reviewCounts[id]})
-            </button>
-          ))}
-        </div>
-      )}
-      {reviewError && <p role="alert" className="mb-4 text-sm text-red-300">{reviewError}</p>}
-      {reviewable && reviewFilter === "approved" && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <span className="mr-auto text-sm text-[var(--mut)]">Exportar aprobadas de esta vista ({reviewCounts.approved})</span>
-          {([["pdf", "PDF simple"], ["pdf_full", "PDF completo"], ["xlsx", "Excel"]] as const).map(([format, label]) => (
-            <button key={format} onClick={() => exportApproved(format)}
-              disabled={!visible.length || savingCount > 0 || exporting !== null}
-              className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/40 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40">
-              {exporting === format ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-              {label}
-            </button>
-          ))}
-          {exportError && <p role="alert" className="w-full text-sm text-red-300">{exportError}</p>}
-        </div>
-      )}
+        {reviewable && (
+          <div className="inline-flex overflow-hidden rounded-lg border border-[var(--bd)] text-sm">
+            {([["pending", "Pendientes"], ["approved", "Aprobadas"], ["discarded", "Descartadas"], ["all", "Todas"]] as const).map(([id, label]) => (
+              <button key={id} onClick={() => setReviewFilter(id)} aria-pressed={reviewFilter === id}
+                className={`border-l border-[var(--bd)] px-3 py-1.5 first:border-l-0 transition ${reviewFilter === id ? "bg-white/10 text-[var(--tx)]" : "text-[var(--mut)] hover:text-[var(--tx)]"}`}>
+                {label} <span className="text-xs opacity-70">{reviewCounts[id]}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {reviewable && approvedCount > 0 && (
+          <div className="ml-auto">
+            <Menu label={`Exportar (${approvedCount})`} busy={exporting !== null} disabled={savingCount > 0 || exporting !== null}
+              items={[
+                { label: "PDF simple", onClick: () => exportApproved("pdf") },
+                { label: "PDF completo (fichas)", onClick: () => exportApproved("pdf_full") },
+                { label: "Excel", onClick: () => exportApproved("xlsx") },
+              ]} />
+          </div>
+        )}
+      </div>
+      {(reviewError || exportError) && <p role="alert" className="mb-4 text-sm text-red-300">{reviewError || exportError}</p>}
 
       {visible.length ? visible.map((g) => (
         <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} />
@@ -346,13 +344,47 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
   );
 }
 
-function Kpi({ n, label, accent }: { n: number; label: string; accent?: "red" | "violet" | "blue" | "amber" | "green" }) {
-  const color = accent === "red" ? "text-red-300" : accent === "amber" ? "text-amber-300" : accent === "violet" ? "text-violet-300"
-    : accent === "blue" ? "text-blue-300" : accent === "green" ? "text-emerald-300" : "";
+type Accent = "red" | "violet" | "blue" | "amber" | "green" | "mut";
+const ACCENT_TX: Record<Accent, string> = {
+  red: "text-red-300", amber: "text-amber-300", violet: "text-violet-300",
+  blue: "text-blue-300", green: "text-emerald-300", mut: "text-[var(--tx)]",
+};
+
+/** Estadística compacta en línea (número + etiqueta), sin tile pesado. */
+function Stat({ n, label, accent = "mut" }: { n: number; label: string; accent?: Accent }) {
   return (
-    <div className="min-w-24 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-4 py-2.5">
-      <div className={`text-2xl font-bold ${color}`}>{n}</div>
-      <div className="text-[11px] uppercase tracking-wide text-[var(--mut)]">{label}</div>
+    <div className="flex items-baseline gap-1.5">
+      <span className={`text-lg font-bold ${ACCENT_TX[accent]}`}>{n}</span>
+      <span className="text-xs text-[var(--mut)]">{label}</span>
+    </div>
+  );
+}
+
+/** Menú desplegable simple (botón + panel), cierra al hacer clic fuera. */
+function Menu({ label, disabled, busy, items }: {
+  label: string; disabled?: boolean; busy?: boolean;
+  items: { label: string; onClick: () => void }[];
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)} disabled={disabled}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/40 px-3 py-1.5 text-sm text-emerald-300 hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40">
+        {busy ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />} {label} <ChevronDown size={14} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 z-20 mt-1 min-w-44 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-1 shadow-xl">
+            {items.map((it) => (
+              <button key={it.label} onClick={() => { setOpen(false); it.onClick(); }}
+                className="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-white/5">
+                {it.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
