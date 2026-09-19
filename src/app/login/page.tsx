@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Loader2 } from "lucide-react";
+import { Mail, Lock, Loader2, ArrowRight, Search } from "lucide-react";
 import { loginAction } from "../auth-actions";
+import LoginArt from "../_components/LoginArt";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -18,27 +19,81 @@ export default function LoginPage() {
     setError(r.error ?? "Error"); setBusy(false);
   }
 
+  const input = "w-full rounded-xl border border-[var(--bd)] bg-[var(--bg)] py-3 pl-11 pr-4 text-sm text-[var(--tx)] outline-none transition focus:border-[var(--acc)] focus:ring-4 focus:ring-emerald-500/10 placeholder:text-[var(--mut)]";
+
   return (
-    <div className="mx-auto mt-16 max-w-sm">
-      <div className="mb-6 flex items-center justify-center gap-2 text-lg font-semibold tracking-wide">
-        <Search size={20} className="text-[var(--acc)]" /> vsion
+    <div className="mx-[calc(50%-50vw)] my-[-2rem] flex min-h-[calc(100vh-57px)] w-screen">
+      {/* Izquierda: animación SVG */}
+      <div className="relative hidden w-1/2 overflow-hidden lg:block">
+        <LoginArt />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f0d] via-transparent to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 p-12">
+          <div className="mb-4 inline-flex w-fit items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-1.5 text-sm font-medium text-emerald-300 backdrop-blur-md">
+            <span className="relative mr-2 flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            Comparador de marcas con IA
+          </div>
+          <h2 className="max-w-md text-2xl font-bold leading-tight text-white">
+            Vigilancia de marcas, más rápida y clara.
+          </h2>
+          <p className="mt-2 max-w-md text-sm text-zinc-300">
+            Barrido fonético/textual + análisis IA sobre cada gaceta.
+          </p>
+        </div>
       </div>
-      <form onSubmit={submit} className="rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-6">
-        <h1 className="mb-4 text-lg font-semibold">Iniciar sesión</h1>
-        <label className="mb-1 block text-xs text-[var(--mut)]">Email</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
-          className="mb-3 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--acc)]" />
-        <label className="mb-1 block text-xs text-[var(--mut)]">Contraseña</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
-          className="mb-4 w-full rounded-lg border border-[var(--bd)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--acc)]" />
-        {error && <p className="mb-3 text-sm text-red-300">{error}</p>}
-        <button disabled={busy} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--acc)] px-4 py-2 font-medium text-black disabled:opacity-40">
-          {busy && <Loader2 size={16} className="animate-spin" />} Entrar
-        </button>
-        <p className="mt-4 text-center text-xs text-[var(--mut)]">
-          ¿Primera vez? <a href="/register" className="text-[var(--acc)] hover:underline">Registrar</a>
+
+      {/* Derecha: formulario */}
+      <div className="relative flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-16">
+        <div className="pointer-events-none absolute right-[-10%] top-[10%] h-72 w-72 rounded-full bg-emerald-500/10 blur-[120px]" />
+        <div className="relative z-10 mx-auto w-full max-w-md">
+          <div className="mb-8">
+            <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15">
+              <Search size={22} className="text-[var(--acc)]" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">Bienvenido a vsion</h1>
+            <p className="mt-1 text-[var(--mut)]">Ingresa tus credenciales para continuar</p>
+          </div>
+
+          <form onSubmit={submit} className="space-y-5">
+            {error && (
+              <div className="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                <p>{error}</p>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="ml-1 text-sm font-medium text-[var(--mut)]">Correo electrónico</label>
+              <div className="group relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--mut)] transition-colors group-focus-within:text-[var(--acc)]"><Mail size={18} /></div>
+                <input type="email" required autoComplete="username" placeholder="nombre@ejemplo.com"
+                  value={email} onChange={(e) => setEmail(e.target.value)} className={input} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <label className="ml-1 text-sm font-medium text-[var(--mut)]">Contraseña</label>
+              <div className="group relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4 text-[var(--mut)] transition-colors group-focus-within:text-[var(--acc)]"><Lock size={18} /></div>
+                <input type="password" required autoComplete="current-password" placeholder="••••••••"
+                  value={password} onChange={(e) => setPassword(e.target.value)} className={input} />
+              </div>
+            </div>
+
+            <button disabled={busy} type="submit"
+              className="group relative mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white shadow-[0_0_20px_rgba(16,185,129,0.2)] transition-all hover:bg-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.3)] active:scale-[0.98] disabled:opacity-50">
+              {busy ? <Loader2 className="animate-spin" size={20} /> : (<>Iniciar sesión <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" /></>)}
+            </button>
+          </form>
+
+          <p className="mt-6 text-center text-xs text-[var(--mut)]">
+            ¿Primera vez? <a href="/register" className="text-[var(--acc)] hover:underline">Crear cuenta</a>
+          </p>
+        </div>
+        <p className="absolute bottom-6 left-0 right-0 text-center text-xs text-[var(--mut)]">
+          © {new Date().getFullYear()} vsion · Propiedad Industrial
         </p>
-      </form>
+      </div>
     </div>
   );
 }
