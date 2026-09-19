@@ -38,9 +38,6 @@ export default function LoginPage() {
           <h2 className="max-w-md text-2xl font-bold leading-tight text-white">
             Vigilancia de marcas, más rápida y clara.
           </h2>
-          <p className="mt-2 max-w-md text-sm text-zinc-300">
-            Barrido fonético/textual + análisis IA sobre cada gaceta.
-          </p>
         </div>
       </div>
 
