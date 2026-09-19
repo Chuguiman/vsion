@@ -274,7 +274,7 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
 
   const nNo = Math.max(0, analyzedCount - nOpp - nMon);
   const distro: Seg[] = showAiKpis
-    ? [{ id: "opp", label: "Oponerse", value: nOpp, color: C.red }, { id: "mon", label: "Vigilar", value: nMon, color: C.amber }, { id: "no", label: "Sin acción", value: nNo, color: C.muted }]
+    ? [{ id: "opp", label: "Oponerse", value: nOpp, color: C.red }, { id: "mon", label: "Vigilar", value: nMon, color: C.amber }, { id: "no", label: "Sin acción", value: nNo, color: C.muted }, { id: "firm", label: "Tu firma", value: stats.firm, color: C.violet }, { id: "own", label: "Tu marca", value: stats.own, color: C.blue }]
     : [{ id: "conflict", label: "Conflicto", value: stats.conflict, color: C.red }, { id: "firm", label: "Tu firma", value: stats.firm, color: C.violet }, { id: "own", label: "Tu marca", value: stats.own, color: C.blue }];
 
   const distroIds = new Set(distro.map((s) => s.id));
