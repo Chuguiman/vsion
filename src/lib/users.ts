@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { getDb } from "./db";
+import { getDb, withDbTimeout } from "./db";
 import type { Role } from "./auth";
 
 export interface UserRow {
@@ -15,17 +15,17 @@ export interface UserRow {
 export async function countUsers(): Promise<number> {
   const db = getDb();
   if (!db) return 0;
-  const [r] = await db<{ n: number }[]>`SELECT count(*)::int AS n FROM users`;
+  const [r] = await withDbTimeout(() => db<{ n: number }[]>`SELECT count(*)::int AS n FROM users`);
   return r?.n ?? 0;
 }
 
 export async function findByEmail(email: string) {
   const db = getDb();
   if (!db) return null;
-  const [u] = await db<{ id: number; email: string; name: string; role: Role; password_hash: string; organization_id: number | null; must_change: boolean }[]>`
+  const [u] = await withDbTimeout(() => db<{ id: number; email: string; name: string; role: Role; password_hash: string; organization_id: number | null; must_change: boolean }[]>`
     SELECT id, email, name, role, password_hash, organization_id, must_change
     FROM users WHERE lower(email) = lower(${email}) LIMIT 1
-  `;
+  `);
   return u ?? null;
 }
 

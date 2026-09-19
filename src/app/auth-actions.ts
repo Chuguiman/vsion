@@ -44,6 +44,9 @@ export async function loginAction(email: string, password: string): Promise<Res>
     await setSessionCookie({ userId: u.id, email: u.email, name: u.name, role: u.role, organizationId: u.organization_id ?? null });
     return { ok: true };
   } catch (e) {
+    if (e instanceof Error && e.message === "db_timeout") {
+      return { ok: false, error: "La base de datos tardó demasiado. Reintenta." };
+    }
     return { ok: false, error: e instanceof Error ? e.message : "Error al iniciar sesión." };
   }
 }
