@@ -63,7 +63,7 @@ export async function createApprovedPdf(groups: PubDTO[], meta: ReportDTO["meta"
       r["Análisis IA"] || "-",
     ]),
     styles: { fontSize: 8, cellPadding: 3, overflow: "linebreak" },
-    headStyles: { fillColor: [5, 120, 87] },
+    headStyles: { fillColor: [139, 125, 232] },
     columnStyles: { 0: { cellWidth: 49 }, 1: { cellWidth: 49 }, 2: { cellWidth: 25 }, 3: { cellWidth: 15 }, 4: { cellWidth: 34 }, 5: { cellWidth: 97 } },
     rowPageBreak: "avoid",
     didDrawPage: () => {
@@ -87,7 +87,7 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"])
 
   const doc = new jsPDF({ orientation: "portrait", format: "a4" });
   const W = 210, H = 297, M = 14, colW = (W - M * 2 - 8) / 2;
-  const ACC: [number, number, number] = [124, 58, 237];
+  const ACC: [number, number, number] = [139, 125, 232];
   const MUT: [number, number, number] = [128, 128, 136];
   const TX: [number, number, number] = [33, 33, 38];
   const RED: [number, number, number] = [185, 28, 28];

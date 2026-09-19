@@ -87,7 +87,7 @@ export default function LoginForm() {
             </div>
 
             <button disabled={busy} type="submit"
-              className="group relative mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-all hover:bg-violet-500 hover:shadow-[0_0_30px_rgba(139,92,246,0.3)] active:scale-[0.98] disabled:opacity-50">
+              className="group relative mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--acc)] px-4 py-3 font-semibold text-white shadow-[0_0_20px_rgba(157,140,240,0.25)] transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-50">
               {busy ? <Loader2 className="animate-spin" size={20} /> : (<>Iniciar sesión <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" /></>)}
             </button>
           </form>
