@@ -26,7 +26,7 @@ export default function LoginForm() {
     }
   }
 
-  const input = "w-full rounded-xl border border-[var(--bd)] bg-[var(--bg)] py-3 pl-11 pr-4 text-sm text-[var(--tx)] outline-none transition focus:border-[var(--acc)] focus:ring-4 focus:ring-emerald-500/10 placeholder:text-[var(--mut)]";
+  const input = "w-full rounded-xl border border-[var(--bd)] bg-[var(--bg)] py-3 pl-11 pr-4 text-sm text-[var(--tx)] outline-none transition focus:border-[var(--acc)] focus:ring-4 focus:ring-violet-500/10 placeholder:text-[var(--mut)]";
 
   return (
     <div className="mx-[calc(50%-50vw)] my-[-2rem] flex min-h-[calc(100vh-57px)] w-screen">
@@ -34,10 +34,10 @@ export default function LoginForm() {
         <LoginArt />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f0d] via-transparent to-transparent" />
         <div className="absolute inset-x-0 bottom-0 p-12">
-          <div className="mb-4 inline-flex w-fit items-center rounded-full border border-emerald-500/30 bg-emerald-500/15 px-4 py-1.5 text-sm font-medium text-emerald-300 backdrop-blur-md">
+          <div className="mb-4 inline-flex w-fit items-center rounded-full border border-violet-500/30 bg-violet-500/15 px-4 py-1.5 text-sm font-medium text-violet-300 backdrop-blur-md">
             <span className="relative mr-2 flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-violet-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-violet-500" />
             </span>
             Comparador de marcas con IA
           </div>
@@ -48,10 +48,10 @@ export default function LoginForm() {
       </div>
 
       <div className="relative flex w-full flex-col justify-center px-6 py-12 lg:w-1/2 lg:px-16">
-        <div className="pointer-events-none absolute right-[-10%] top-[10%] h-72 w-72 rounded-full bg-emerald-500/10 blur-[120px]" />
+        <div className="pointer-events-none absolute right-[-10%] top-[10%] h-72 w-72 rounded-full bg-violet-500/10 blur-[120px]" />
         <div className="relative z-10 mx-auto w-full max-w-md">
           <div className="mb-8">
-            <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/15">
+            <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-violet-500/15">
               <Search size={22} className="text-[var(--acc)]" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight">Bienvenido a vsion</h1>
@@ -87,7 +87,7 @@ export default function LoginForm() {
             </div>
 
             <button disabled={busy} type="submit"
-              className="group relative mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white shadow-[0_0_20px_rgba(16,185,129,0.2)] transition-all hover:bg-emerald-500 hover:shadow-[0_0_30px_rgba(16,185,129,0.3)] active:scale-[0.98] disabled:opacity-50">
+              className="group relative mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-3 font-semibold text-white shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-all hover:bg-violet-500 hover:shadow-[0_0_30px_rgba(139,92,246,0.3)] active:scale-[0.98] disabled:opacity-50">
               {busy ? <Loader2 className="animate-spin" size={20} /> : (<>Iniciar sesión <ArrowRight size={18} className="transition-transform group-hover:translate-x-1" /></>)}
             </button>
           </form>

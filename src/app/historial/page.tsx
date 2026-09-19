@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
+import { getSession } from "@/lib/auth";
+import DeleteRunButton from "@/app/_components/DeleteRunButton";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,8 @@ export default async function Historial() {
   }
 
   // Workspace compartido: todos ven las corridas.
+  const s = await getSession();
+  const isSuper = s?.role === "superadmin";
   const rows = await db<RunRow[]>`
     SELECT id, country, gazette_number, date_public, n_candidates, n_own, created_at
     FROM runs ORDER BY created_at DESC LIMIT 100`;
@@ -44,6 +48,7 @@ export default async function Historial() {
                 <th className="px-4 py-2 font-medium">Conflictos</th>
                 <th className="px-4 py-2 font-medium">Aviso</th>
                 <th className="px-4 py-2 font-medium">Procesada</th>
+                {isSuper && <th className="px-4 py-2 font-medium"></th>}
               </tr>
             </thead>
             <tbody>
@@ -58,6 +63,7 @@ export default async function Historial() {
                   <td className="px-4 py-2.5">{r.n_candidates - r.n_own}</td>
                   <td className="px-4 py-2.5 text-blue-300">{r.n_own}</td>
                   <td className="px-4 py-2.5 text-[var(--mut)]">{fmtDateTime(r.created_at)}</td>
+                  {isSuper && <td className="px-4 py-2.5 text-right"><DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} /></td>}
                 </tr>
               ))}
             </tbody>

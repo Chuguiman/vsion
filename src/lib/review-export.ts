@@ -87,7 +87,7 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"])
 
   const doc = new jsPDF({ orientation: "portrait", format: "a4" });
   const W = 210, H = 297, M = 14, colW = (W - M * 2 - 8) / 2;
-  const ACC: [number, number, number] = [5, 120, 87];
+  const ACC: [number, number, number] = [124, 58, 237];
   const MUT: [number, number, number] = [128, 128, 136];
   const TX: [number, number, number] = [33, 33, 38];
   const RED: [number, number, number] = [185, 28, 28];

@@ -115,6 +115,21 @@ export async function analyzeBatchAction(runId: number, batchSize = 15): Promise
   return analyzeRunBatch(runId, batchSize);
 }
 
+/** Borra una comparación (solo superadmin). */
+export async function deleteRunAction(runId: number): Promise<{ ok: boolean; error?: string }> {
+  const s = await getSession();
+  if (s?.role !== "superadmin") return { ok: false, error: "No autorizado." };
+  const db = getDb();
+  if (!db) return { ok: false, error: "Sin base de datos." };
+  try {
+    await db`DELETE FROM reviews WHERE run_id = ${runId}`;
+    await db`DELETE FROM runs WHERE id = ${runId}`;
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error." };
+  }
+}
+
 /** Fase 3: fija/limpia la decisión humana de un candidato. */
 export async function setReviewAction(runId: number, candKey: string, status: ReviewStatus | null): Promise<{ ok: boolean; error?: string }> {
   try {

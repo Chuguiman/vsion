@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { getSession } from "@/lib/auth";
-import { getAvatar } from "@/lib/users";
 import NavMenu, { type NavLink } from "./_components/NavMenu";
 import ThemeToggle from "./_components/ThemeToggle";
 import "flag-icons/css/flag-icons.min.css";
@@ -31,7 +30,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     { href: "/perfil", label: "Perfil", icon: "profile", show: !!role },
   ];
   const links: NavLink[] = all.filter((l) => l.show).map(({ href, label, icon }) => ({ href, label, icon }));
-  const avatar = session ? await getAvatar(session.userId) : null;
 
   return (
     <html lang="es" suppressHydrationWarning>
@@ -42,7 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Link href={isSuper ? "/" : "/historial"} className="flex items-center gap-2 font-semibold tracking-wide">
               <Search size={18} className="text-[var(--acc)]" /> vsion
             </Link>
-            {session && <NavMenu links={links} userName={session.name} role={role!} avatar={avatar} />}
+            {session && <NavMenu links={links} userName={session.name} role={role!} />}
             <ThemeToggle className={session ? "" : "ml-auto"} />
           </div>
         </header>
