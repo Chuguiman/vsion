@@ -135,7 +135,7 @@ function Pub({ g, filter, reviewable, reviews, onReview }: {
           <span>{g.markType}</span>
           <span>Clases: {g.classes.join(", ") || "—"}</span>
           <span>Solicitante: {g.applicant || "—"}</span>
-          {g.representant && <span>Apoderado gaceta: <span className="font-medium text-teal-300">{g.representant}</span></span>}
+          {g.representant && <span>Apoderado: <span className="font-medium text-teal-300">{g.representant}</span></span>}
         </div>
       </header>
       {/* Desktop: tabla densa */}
@@ -286,7 +286,7 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
       {/* Widget de distribución + meta de gaceta */}
       <div className="mb-4">
         <div className="mb-2 flex flex-wrap items-baseline gap-x-3">
-          <h2 className="text-base font-semibold">Gaceta {meta.country}{meta.number}</h2>
+          <h2 className="text-base font-semibold">Publicación {meta.country}{meta.number}</h2>
           <span className="text-xs text-[var(--mut)]">{meta.datePublic} · oposición hasta {meta.dateDue}</span>
           {reviewable && approvedCount > 0 && (
             <span className="ml-auto flex items-baseline gap-1.5"><span className="text-lg font-bold text-emerald-300">{approvedCount}</span><span className="text-xs text-[var(--mut)]">aprobadas</span></span>

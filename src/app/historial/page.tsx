@@ -16,7 +16,7 @@ export default async function Historial() {
   if (!db) {
     return (
       <div>
-        <h1 className="mb-4 text-xl font-semibold">Historial</h1>
+        <h1 className="mb-4 text-xl font-semibold">Vigilancia</h1>
         <p className="rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-4 py-3 text-sm text-[var(--mut)]">
           Sin base de datos configurada. Define <code className="text-[var(--tx)]">DATABASE_URL</code> (Supabase) para guardar y ver el historial.
         </p>
@@ -31,7 +31,7 @@ export default async function Historial() {
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold">Historial</h1>
+      <h1 className="mb-4 text-xl font-semibold">Vigilancia</h1>
       {rows.length === 0 ? (
         <p className="text-sm text-[var(--mut)]">Aún no hay corridas.</p>
       ) : (
@@ -39,7 +39,7 @@ export default async function Historial() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-[var(--mut)]">
-                <th className="px-4 py-2 font-medium">Gaceta</th>
+                <th className="px-4 py-2 font-medium">Publicación</th>
                 <th className="px-4 py-2 font-medium">Publicada</th>
                 <th className="px-4 py-2 font-medium">Conflictos</th>
                 <th className="px-4 py-2 font-medium">Aviso</th>

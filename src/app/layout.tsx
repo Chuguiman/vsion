@@ -23,7 +23,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const all: (NavLink & { show: boolean })[] = [
     { href: "/", label: "Nueva comparación", icon: "search", show: isSuper },
     { href: "/cartera", label: "Cartera", icon: "database", show: isSuper },
-    { href: "/historial", label: "Historial", icon: "history", show: !!role },
+    { href: "/historial", label: "Vigilancia", icon: "history", show: !!role },
     { href: "/admin/usuarios", label: "Usuarios", icon: "users", show: isAdmin },
     { href: "/paises", label: "Países", icon: "globe", show: isAdmin },
     { href: "/billing", label: "Billing", icon: "billing", show: isAdmin },

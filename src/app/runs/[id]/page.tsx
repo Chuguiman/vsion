@@ -23,7 +23,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   return (
     <div>
       <Link href="/historial" className="mb-4 inline-block text-sm text-[var(--mut)] hover:text-[var(--tx)]">
-        ← Historial
+        ← Vigilancia
       </Link>
       <Results dto={row.payload} runId={Number(id)} reviews={reviews} canEdit={canEdit} />
     </div>

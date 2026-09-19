@@ -63,9 +63,9 @@ export default function NewComparison({ carteraInfo }: { carteraInfo: { count: n
             )}
             <Link href="/cartera" className="ml-auto text-xs text-[var(--acc)] hover:underline">Reemplazar cartera</Link>
           </div>
-          <p className="mb-4 text-sm text-[var(--mut)]">Sube solo la gaceta. Se compara contra tu cartera guardada.</p>
+          <p className="mb-4 text-sm text-[var(--mut)]">Sube solo la publicación. Se compara contra tu cartera guardada.</p>
           <div className="mb-4 max-w-md">
-            <Drop label="Gaceta" hint="CO####.json" file={gazette} onFile={setGazette} />
+            <Drop label="Publicación" hint="CO####.json" file={gazette} onFile={setGazette} />
           </div>
         </>
       ) : (
@@ -76,7 +76,7 @@ export default function NewComparison({ carteraInfo }: { carteraInfo: { count: n
           </p>
           <div className="mb-4 grid gap-3 sm:grid-cols-2">
             <Drop label="Cartera del cliente" hint="casos.json" file={client} onFile={setClient} />
-            <Drop label="Gaceta" hint="CO####.json" file={gazette} onFile={setGazette} />
+            <Drop label="Publicación" hint="CO####.json" file={gazette} onFile={setGazette} />
           </div>
         </>
       )}
