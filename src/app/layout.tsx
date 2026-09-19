@@ -4,7 +4,10 @@ import { Search } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getAvatar } from "@/lib/users";
 import NavMenu, { type NavLink } from "./_components/NavMenu";
+import ThemeToggle from "./_components/ThemeToggle";
 import "./globals.css";
+
+const themeScript = `try{if(localStorage.getItem('vsion-theme')==='light')document.documentElement.setAttribute('data-theme','light')}catch(e){}`;
 
 export const metadata: Metadata = {
   title: "vsion — comparador de marcas",
@@ -30,14 +33,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const avatar = session ? await getAvatar(session.userId) : null;
 
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <header className="border-b border-[var(--bd)] bg-[var(--bg2)]">
           <div className="mx-auto flex max-w-6xl items-center gap-x-2 px-4 py-3">
             <Link href={isSuper ? "/" : "/historial"} className="flex items-center gap-2 font-semibold tracking-wide">
               <Search size={18} className="text-[var(--acc)]" /> vsion
             </Link>
             {session && <NavMenu links={links} userName={session.name} role={role!} avatar={avatar} />}
+            <ThemeToggle className={session ? "" : "ml-auto"} />
           </div>
         </header>
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
