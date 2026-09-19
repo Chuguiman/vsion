@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
-import { listPublications } from "@/lib/publications";
+import { listPublications, publicImageUrl } from "@/lib/publications";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +64,7 @@ export default async function PublicacionesPage({
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-[var(--mut)]">
+                  <th className="px-3 py-2 font-medium">Img</th>
                   <th className="px-3 py-2 font-medium">Marca</th>
                   <th className="px-3 py-2 font-medium">Clases</th>
                   <th className="px-3 py-2 font-medium">Solicitante</th>
@@ -73,8 +74,17 @@ export default async function PublicacionesPage({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {rows.map((r) => {
+                  const img = publicImageUrl(r.image_bucket, r.image_path);
+                  return (
                   <tr key={r.id} className="border-b border-[var(--bd)] last:border-0 align-top hover:bg-white/5">
+                    <td className="px-3 py-2">
+                      {img ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={img} alt={r.denom || "figurativa"} loading="lazy"
+                          className="h-10 w-10 rounded border border-[var(--bd)] bg-white object-contain" />
+                      ) : <span className="text-[var(--mut)]">—</span>}
+                    </td>
                     <td className="px-3 py-2">
                       {r.denom || <span className="text-[var(--mut)] italic">(figurativa)</span>}
                       {r.pys && <span className="mt-0.5 block max-w-md truncate text-[11px] text-[var(--mut)]">{r.pys}</span>}
@@ -94,7 +104,8 @@ export default async function PublicacionesPage({
                     <td className="px-3 py-2 text-[var(--mut)]">{r.mark_type || "—"}</td>
                     <td className="px-3 py-2 text-[var(--mut)]">{r.status || "—"}</td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

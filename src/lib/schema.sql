@@ -134,6 +134,18 @@ create table if not exists publications (
 );
 create index if not exists publications_run_idx on publications (run_id, seq);
 
+-- Imágenes de publicaciones (Fase B). Clave = id de imagen del SIC (== nombre de
+-- archivo). Se llena con scripts/ingest-images.mjs; el visor la une por image_id.
+create table if not exists mark_images (
+  image_id   text primary key,     -- p.ej. 0900000282550ccb.webp
+  bucket     text not null,
+  path       text not null,        -- ruta del objeto dentro del bucket
+  phash      text,                 -- dHash perceptual (16 hex)
+  width      int,
+  height     int,
+  created_at timestamptz not null default now()
+);
+
 -- Fase 3: decisión humana por candidato (aprobar / descartar). Tabla aparte
 -- para no colisionar con la escritura del payload de 'runs' durante el análisis.
 create table if not exists reviews (

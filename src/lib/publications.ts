@@ -15,7 +15,15 @@ export interface PubRecord {
   mark_type: string | null;
   status: string | null;
   image_id: string | null;
-  image_path: string | null;
+  image_bucket: string | null;
+  image_path: string | null;   // ruta del objeto dentro del bucket (mark_images)
+}
+
+/** URL pública de una imagen en Supabase Storage. */
+export function publicImageUrl(bucket: string | null, objectPath: string | null): string | null {
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").replace(/\/$/, "");
+  if (!base || !bucket || !objectPath) return null;
+  return `${base}/storage/v1/object/public/${bucket}/${objectPath}`;
 }
 
 /** Guarda todas las publicaciones de una gaceta (reemplaza las del run). */
@@ -64,10 +72,13 @@ export async function listPublications(
   const [{ n }] = await db<{ n: number }[]>`
     SELECT count(*)::int AS n FROM publications WHERE run_id = ${runId} ${filter}`;
   const rows = await db<PubRecord[]>`
-    SELECT id, seq, denom, classes, pys, applicant, applicant_country, representant,
-           application_number, application_date, mark_type, status, image_id, image_path
-    FROM publications WHERE run_id = ${runId} ${filter}
-    ORDER BY seq LIMIT ${pageSize} OFFSET ${offset}`;
+    SELECT p.id, p.seq, p.denom, p.classes, p.pys, p.applicant, p.applicant_country, p.representant,
+           p.application_number, p.application_date, p.mark_type, p.status, p.image_id,
+           mi.bucket AS image_bucket, mi.path AS image_path
+    FROM publications p
+    LEFT JOIN mark_images mi ON mi.image_id = p.image_id
+    WHERE p.run_id = ${runId} ${filter}
+    ORDER BY p.seq LIMIT ${pageSize} OFFSET ${offset}`;
   return { rows, total: n, page, pageSize, pages: Math.max(1, Math.ceil(n / pageSize)) };
 }
 
