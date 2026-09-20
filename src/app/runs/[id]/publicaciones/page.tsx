@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
@@ -40,8 +41,9 @@ export default async function PublicacionesPage({
 
   return (
     <div>
-      <Link href={`/runs/${runId}`} className="mb-4 inline-block text-sm text-[var(--mut)] hover:text-[var(--tx)]">
-        ← Corrida {run.country}{run.gazette_number}
+      <Link href={`/runs/${runId}`}
+        className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-1.5 text-sm text-[var(--mut)] transition hover:border-[var(--acc)] hover:text-[var(--tx)]">
+        <ArrowLeft size={16} /> Atrás
       </Link>
       <div className="mb-4 flex flex-wrap items-baseline gap-x-3">
         <h1 className="text-xl font-semibold">Publicación {run.country}{run.gazette_number}</h1>
