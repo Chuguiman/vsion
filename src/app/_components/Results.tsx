@@ -356,7 +356,7 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
       {(reviewError || exportError) && <p role="alert" className="mb-4 text-sm text-red-300">{reviewError || exportError}</p>}
 
       {visible.length ? visible.map((g) => (
-        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} imageUrl={images[g.image]} />
+        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} imageUrl={images[g.image?.replace(/\.(webp|png|jpe?g)$/i, "")]} />
       )) : <p className="text-[var(--mut)]">Sin resultados para este filtro.</p>}
     </div>
   );

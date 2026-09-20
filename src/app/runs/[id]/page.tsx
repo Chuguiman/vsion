@@ -28,10 +28,12 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
     SELECT DISTINCT p.image_id, mi.bucket, mi.path
     FROM publications p JOIN mark_images mi ON mi.image_id = p.image_id
     WHERE p.run_id = ${Number(id)} AND p.image_id IS NOT NULL AND p.image_id <> ''`;
+  // El payload puede traer el id con o sin extensión → se normaliza para casar.
+  const normId = (s: string) => s.replace(/\.(webp|png|jpe?g)$/i, "");
   const images: Record<string, string> = {};
   for (const r of imgRows) {
     const url = publicImageUrl(r.bucket, r.path);
-    if (url) images[r.image_id] = url;
+    if (url) images[normId(r.image_id)] = url;
   }
 
   return (
