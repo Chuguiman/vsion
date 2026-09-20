@@ -118,6 +118,7 @@ create table if not exists publications (
   run_id             bigint not null,
   seq                int    not null default 0,   -- orden dentro de la gaceta
   denom              text   not null default '',  -- vacío = figurativa/3D
+  mark_category      text,                        -- Marca / Lema / Enseña / …
   classes            int[]  not null default '{}',
   pys                text,
   applicant          text,

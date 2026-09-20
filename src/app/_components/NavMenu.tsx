@@ -1,27 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Search, History, Database, Users, Globe, CreditCard, UserCircle, LogOut, Menu as MenuIcon, X } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Search, History, Database, Users, Globe, UserCircle, LogOut, PanelLeftClose, PanelLeftOpen, Menu as MenuIcon, X } from "lucide-react";
 import { logoutAction } from "../auth-actions";
 
 const ICONS: Record<string, React.ReactNode> = {
   search: <Search size={15} />, history: <History size={15} />, database: <Database size={15} />,
-  users: <Users size={15} />, globe: <Globe size={15} />, billing: <CreditCard size={15} />, profile: <UserCircle size={15} />,
+  users: <Users size={15} />, globe: <Globe size={15} />, profile: <UserCircle size={15} />,
 };
 
 export interface NavLink { href: string; label: string; icon: string }
 
-export default function NavMenu({ links, userName, role, avatar }: { links: NavLink[]; userName: string; role: string; avatar?: string | null }) {
+export default function NavMenu({ links, userName, avatar }: { links: NavLink[]; userName: string; avatar?: string | null }) {
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    setCollapsed(document.documentElement.getAttribute("data-sidebar-collapsed") === "true");
+  }, []);
+  function toggleSidebar() {
+    const next = !collapsed;
+    setCollapsed(next);
+    document.documentElement.toggleAttribute("data-sidebar-collapsed", next);
+    if (next) document.documentElement.setAttribute("data-sidebar-collapsed", "true");
+    try { localStorage.setItem("vsion-sidebar-collapsed", String(next)); } catch {}
+  }
+  const pathname = usePathname();
+  const isActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(`${href}/`)) || (href === "/historial" && pathname.startsWith("/runs/"));
   const Avatar = ({ size }: { size: number }) => avatar
     ? <img src={avatar} alt="" className="rounded-full object-cover" style={{ width: size, height: size }} />
     : <UserCircle size={size} className="text-[var(--mut)]" />;
 
   const LogoutForm = () => (
     <form action={logoutAction}>
-      <button className="flex items-center gap-1 rounded-md border border-[var(--bd)] px-2 py-1 text-xs text-[var(--mut)] hover:text-[var(--tx)]">
-        <LogOut size={13} /> Salir
+      <button aria-label="Salir" title="Salir" className="sidebar-logout flex items-center gap-1 rounded-md border border-[var(--bd)] px-2 py-1 text-xs text-[var(--mut)] hover:text-[var(--tx)]">
+        <LogOut size={13} /> <span className="sidebar-label">Salir</span>
       </button>
     </form>
   );
@@ -29,27 +43,34 @@ export default function NavMenu({ links, userName, role, avatar }: { links: NavL
   return (
     <>
       {/* Desktop */}
-      <nav className="ml-4 hidden flex-wrap items-center gap-4 text-sm text-[var(--mut)] sm:flex">
+      <button onClick={toggleSidebar} aria-label={collapsed ? "Expandir menú" : "Contraer menú"}
+        title={collapsed ? "Expandir menú" : "Contraer menú"} aria-expanded={!collapsed} aria-controls="desktop-navigation"
+        className="sidebar-toggle hidden h-8 w-8 items-center justify-center rounded-lg text-[var(--mut)] transition-colors hover:bg-white/5 hover:text-[var(--tx)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)] lg:flex">
+        {collapsed ? <PanelLeftOpen size={17} strokeWidth={1.6} /> : <PanelLeftClose size={17} strokeWidth={1.6} />}
+      </button>
+      <nav id="desktop-navigation" aria-label="Menú principal" className="hidden min-h-0 flex-1 flex-col gap-1 overflow-y-auto text-sm text-[var(--mut)] lg:flex">
         {links.map((l) => (
-          <Link key={l.href} href={l.href} className="flex items-center gap-1 hover:text-[var(--tx)]">
-            {ICONS[l.icon]} {l.label}
+          <Link key={l.href} href={l.href} aria-label={l.label} title={l.label} aria-current={isActive(l.href) ? "page" : undefined} className={`sidebar-link flex items-center gap-3 rounded-lg px-3 py-3 hover:bg-white/5 hover:text-[var(--tx)] ${isActive(l.href) ? "bg-white/5 text-[var(--acc)]" : ""}`}>
+            {ICONS[l.icon]} <span className="sidebar-label">{l.label}</span>
           </Link>
         ))}
       </nav>
-      <div className="ml-auto hidden items-center gap-2 text-xs text-[var(--mut)] sm:flex">
-        <Avatar size={26} />
-        <span>{userName}</span>
+      <div className="hidden shrink-0 flex-col gap-3 border-t border-[var(--bd)] pt-4 text-sm lg:flex">
+        <Link href="/perfil" aria-label={`Perfil de ${userName}`} title={userName} className="sidebar-profile flex min-w-0 items-center gap-3">
+          <span className="shrink-0"><Avatar size={40} /></span>
+          <span className="sidebar-label truncate">{userName}</span>
+        </Link>
         <LogoutForm />
       </div>
 
       {/* Móvil: botón hamburguesa */}
-      <button onClick={() => setOpen(true)} className="ml-auto text-[var(--tx)] sm:hidden" aria-label="Menú">
+      <button onClick={() => setOpen(true)} className="ml-auto text-[var(--tx)] lg:hidden" aria-label="Menú" aria-expanded={open}>
         <MenuIcon size={22} />
       </button>
 
       {/* Panel móvil */}
       {open && (
-        <div className="fixed inset-0 z-50 sm:hidden">
+        <div className="fixed inset-0 z-50 lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-0 h-full w-72 max-w-[80%] border-l border-[var(--bd)] bg-[var(--bg2)] p-4">
             <div className="mb-4 flex items-center justify-between">
@@ -59,7 +80,8 @@ export default function NavMenu({ links, userName, role, avatar }: { links: NavL
             <nav className="flex flex-col gap-1">
               {links.map((l) => (
                 <Link key={l.href} href={l.href} onClick={() => setOpen(false)}
-                  className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm hover:bg-white/5">
+                  aria-current={isActive(l.href) ? "page" : undefined}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm hover:bg-white/5 ${isActive(l.href) ? "bg-white/5 text-[var(--acc)]" : ""}`}>
                   {ICONS[l.icon]} {l.label}
                 </Link>
               ))}

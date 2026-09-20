@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { listPublications, publicImageUrl } from "@/lib/publications";
+import ZoomImage from "@/app/_components/ZoomImage";
 
 export const dynamic = "force-dynamic";
 
@@ -67,8 +68,9 @@ export default async function PublicacionesPage({
                   <th className="px-3 py-2 font-medium">Img</th>
                   <th className="px-3 py-2 font-medium">Marca</th>
                   <th className="px-3 py-2 font-medium">Clases</th>
-                  <th className="px-3 py-2 font-medium">Solicitante</th>
+                  <th className="px-3 py-2 font-medium">Solicitante / Apoderado</th>
                   <th className="px-3 py-2 font-medium">Expediente</th>
+                  <th className="px-3 py-2 font-medium">Categoría</th>
                   <th className="px-3 py-2 font-medium">Tipo</th>
                   <th className="px-3 py-2 font-medium">Estado</th>
                 </tr>
@@ -79,11 +81,7 @@ export default async function PublicacionesPage({
                   return (
                   <tr key={r.id} className="border-b border-[var(--bd)] last:border-0 align-top hover:bg-white/5">
                     <td className="px-3 py-2">
-                      {img ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={img} alt={r.denom || "figurativa"} loading="lazy"
-                          className="h-10 w-10 rounded border border-[var(--bd)] bg-white object-contain" />
-                      ) : <span className="text-[var(--mut)]">—</span>}
+                      {img ? <ZoomImage src={img} alt={r.denom || "Figurativa"} /> : <span className="text-[var(--mut)]">—</span>}
                     </td>
                     <td className="px-3 py-2">
                       {r.denom || <span className="text-[var(--mut)] italic">(figurativa)</span>}
@@ -97,10 +95,12 @@ export default async function PublicacionesPage({
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      {r.applicant || "—"}
-                      {r.applicant_country && <span className="ml-1 text-[11px] text-[var(--mut)]">({r.applicant_country})</span>}
+                      <span className="block">{r.applicant || "—"}
+                        {r.applicant_country && <span className="ml-1 text-[11px] text-[var(--mut)]">({r.applicant_country})</span>}</span>
+                      {r.representant && <span className="mt-0.5 block text-[11px] text-teal-300">Apod.: {r.representant}</span>}
                     </td>
                     <td className="px-3 py-2 font-mono text-[12px] text-[var(--mut)]">{r.application_number || "—"}</td>
+                    <td className="px-3 py-2 text-[var(--mut)]">{r.mark_category || "—"}</td>
                     <td className="px-3 py-2 text-[var(--mut)]">{r.mark_type || "—"}</td>
                     <td className="px-3 py-2 text-[var(--mut)]">{r.status || "—"}</td>
                   </tr>

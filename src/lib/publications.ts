@@ -5,6 +5,7 @@ export interface PubRecord {
   id: number;
   seq: number;
   denom: string;
+  mark_category: string | null;
   classes: number[];
   pys: string | null;
   applicant: string | null;
@@ -34,13 +35,13 @@ export async function savePublications(runId: number, rows: PublicationRow[]): P
   const CHUNK = 500;
   for (let i = 0; i < rows.length; i += CHUNK) {
     const batch = rows.slice(i, i + CHUNK).map((r) => ({
-      run_id: runId, seq: r.seq, denom: r.denom, classes: r.classes, pys: r.pys,
+      run_id: runId, seq: r.seq, denom: r.denom, mark_category: r.markCategory, classes: r.classes, pys: r.pys,
       applicant: r.applicant, applicant_country: r.applicantCountry, representant: r.representant,
       application_number: r.applicationNumber, application_date: r.applicationDate,
       mark_type: r.markType, status: r.status, image_id: r.imageId,
     }));
     await db`INSERT INTO publications ${db(batch,
-      "run_id", "seq", "denom", "classes", "pys", "applicant", "applicant_country",
+      "run_id", "seq", "denom", "mark_category", "classes", "pys", "applicant", "applicant_country",
       "representant", "application_number", "application_date", "mark_type", "status", "image_id")}`;
   }
 }
@@ -72,7 +73,7 @@ export async function listPublications(
   const [{ n }] = await db<{ n: number }[]>`
     SELECT count(*)::int AS n FROM publications WHERE run_id = ${runId} ${filter}`;
   const rows = await db<PubRecord[]>`
-    SELECT p.id, p.seq, p.denom, p.classes, p.pys, p.applicant, p.applicant_country, p.representant,
+    SELECT p.id, p.seq, p.denom, p.mark_category, p.classes, p.pys, p.applicant, p.applicant_country, p.representant,
            p.application_number, p.application_date, p.mark_type, p.status, p.image_id,
            mi.bucket AS image_bucket, mi.path AS image_path
     FROM publications p

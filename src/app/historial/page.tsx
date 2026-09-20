@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 interface RunRow {
   id: number; country: string; gazette_number: string; date_public: string | Date | null;
   n_candidates: number; n_own: number; created_at: string | Date;
+  organization_name: string | null;
 }
 
 const fmtDate = (d: string | Date | null) => (d ? new Date(d).toLocaleDateString("es") : "—");
@@ -30,8 +31,10 @@ export default async function Historial() {
   const s = await getSession();
   const isSuper = s?.role === "superadmin";
   const rows = await db<RunRow[]>`
-    SELECT id, country, gazette_number, date_public, n_candidates, n_own, created_at
-    FROM runs ORDER BY created_at DESC LIMIT 100`;
+    SELECT r.id, r.country, r.gazette_number, r.date_public, r.n_candidates, r.n_own, r.created_at,
+      o.name AS organization_name
+    FROM runs r LEFT JOIN organizations o ON o.id = r.organization_id
+    ORDER BY r.created_at DESC LIMIT 100`;
 
   return (
     <div>
@@ -39,11 +42,12 @@ export default async function Historial() {
       {rows.length === 0 ? (
         <p className="text-sm text-[var(--mut)]">Aún no hay corridas.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
+        <div className="overflow-x-auto rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-[var(--mut)]">
                 <th className="px-4 py-2 font-medium">Publicación</th>
+                <th className="px-4 py-2 font-medium">Organización</th>
                 <th className="px-4 py-2 font-medium">Publicada</th>
                 <th className="px-4 py-2 font-medium">Conflictos</th>
                 <th className="px-4 py-2 font-medium">Aviso</th>
@@ -59,6 +63,7 @@ export default async function Historial() {
                       {r.country}{r.gazette_number}
                     </Link>
                   </td>
+                  <td className="px-4 py-2.5">{r.organization_name ?? "Sin organización"}</td>
                   <td className="px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.date_public)}</td>
                   <td className="px-4 py-2.5">{r.n_candidates - r.n_own}</td>
                   <td className="px-4 py-2.5 text-blue-300">{r.n_own}</td>

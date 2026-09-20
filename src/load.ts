@@ -98,6 +98,7 @@ export function loadGazette(path: string): { meta: GazetteMeta; entries: Gazette
 export interface PublicationRow {
   seq: number;
   denom: string;
+  markCategory: string;
   classes: number[];
   pys: string;
   applicant: string;
@@ -124,6 +125,7 @@ export function parseAllPublications(doc: any): PublicationRow[] {
     out.push({
       seq: seq++,
       denom: String(d.word ?? "").trim(),
+      markCategory: String(d.markCategory ?? "").trim(),
       classes: parseClasses(d.clases),
       pys,
       applicant: String(ap.aplicantName ?? "").trim(),
