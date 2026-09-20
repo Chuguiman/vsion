@@ -69,10 +69,7 @@ export default async function PublicacionesPage({
                   <th className="px-3 py-2 font-medium">Marca</th>
                   <th className="px-3 py-2 font-medium">Clases</th>
                   <th className="px-3 py-2 font-medium">Solicitante / Apoderado</th>
-                  <th className="px-3 py-2 font-medium">Expediente</th>
-                  <th className="px-3 py-2 font-medium">Categoría</th>
-                  <th className="px-3 py-2 font-medium">Tipo</th>
-                  <th className="px-3 py-2 font-medium">Estado</th>
+                  <th className="px-3 py-2 font-medium">Expediente · Categoría · Tipo · Estado</th>
                 </tr>
               </thead>
               <tbody>
@@ -99,10 +96,12 @@ export default async function PublicacionesPage({
                         {r.applicant_country && <span className="ml-1 text-[11px] text-[var(--mut)]">({r.applicant_country})</span>}</span>
                       {r.representant && <span className="mt-0.5 block text-[11px] text-teal-300">Apod.: {r.representant}</span>}
                     </td>
-                    <td className="px-3 py-2 font-mono text-[12px] text-[var(--mut)]">{r.application_number || "—"}</td>
-                    <td className="px-3 py-2 text-[var(--mut)]">{r.mark_category || "—"}</td>
-                    <td className="px-3 py-2 text-[var(--mut)]">{r.mark_type || "—"}</td>
-                    <td className="px-3 py-2 text-[var(--mut)]">{r.status || "—"}</td>
+                    <td className="px-3 py-2 text-[12px]">
+                      <span className="block font-mono text-[var(--tx)]">{r.application_number || "—"}</span>
+                      <span className="mt-0.5 block text-[var(--mut)]">
+                        {[r.mark_category, r.mark_type, r.status].filter(Boolean).join(" · ") || "—"}
+                      </span>
+                    </td>
                   </tr>
                   );
                 })}

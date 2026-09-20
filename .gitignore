@@ -7,3 +7,6 @@ out/
 *.log
 
 *.tsbuildinfo
+
+# scripts temporales de mantenimiento (migraciones/diagnóstico puntual)
+_*.mjs
