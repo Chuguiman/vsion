@@ -21,23 +21,31 @@ function Drop({ label, hint, file, onFile }: {
   );
 }
 
-export default function NewComparison({ carteraInfo }: { carteraInfo: { count: number; updatedAt: string | null } | null }) {
+export default function NewComparison({ carteraInfo, orgs = [], isSuper = false }: {
+  carteraInfo: { count: number; updatedAt: string | null } | null;
+  orgs?: { id: number; name: string }[];
+  isSuper?: boolean;
+}) {
   const router = useRouter();
   const hasCartera = !!carteraInfo && carteraInfo.count > 0;
   const [client, setClient] = useState<File | null>(null);
   const [gazette, setGazette] = useState<File | null>(null);
+  const [orgId, setOrgId] = useState<string>(orgs.length === 1 ? String(orgs[0].id) : "");
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<RunResult | null>(null);
+  const needsOrg = isSuper && !orgId;
 
   async function run() {
     if (!gazette) return;
     if (!hasCartera && !client) return;
+    if (needsOrg) return;
     setBusy(true); setRes(null);
     try {
       const gazetteText = await gazette.text();
+      const oid = orgId ? Number(orgId) : null;
       const r = hasCartera
-        ? await runComparisonFromDb(gazetteText)
-        : await runComparison(await client!.text(), gazetteText);
+        ? await runComparisonFromDb(gazetteText, oid)
+        : await runComparison(await client!.text(), gazetteText, oid);
       // Guardó en historial → ir a la vista de resultados dedicada.
       if (r.ok && r.runId) { router.push(`/runs/${r.runId}`); return; }
       setRes(r); // sin BD: mostrar inline como fallback
@@ -51,6 +59,18 @@ export default function NewComparison({ carteraInfo }: { carteraInfo: { count: n
   return (
     <div>
       <h1 className="mb-1 text-xl font-semibold">Nueva comparación</h1>
+
+      {isSuper && (
+        <div className="mb-5 max-w-md">
+          <label className="mb-1 block text-xs font-medium text-[var(--mut)]">Organización de esta corrida</label>
+          <select value={orgId} onChange={(e) => setOrgId(e.target.value)}
+            className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2 text-sm outline-none focus:border-[var(--acc)]">
+            <option value="">Elige una organización…</option>
+            {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          {orgs.length === 0 && <p className="mt-1 text-xs text-amber-400">No hay organizaciones. Crea una en Usuarios.</p>}
+        </div>
+      )}
 
       {hasCartera ? (
         <>
@@ -81,11 +101,12 @@ export default function NewComparison({ carteraInfo }: { carteraInfo: { count: n
         </>
       )}
 
-      <button onClick={run} disabled={!gazette || (!hasCartera && !client) || busy}
+      <button onClick={run} disabled={!gazette || (!hasCartera && !client) || needsOrg || busy}
         className="inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-4 py-2 font-medium text-black disabled:opacity-40">
         {busy ? <Loader2 className="animate-spin" size={16} /> : <UploadCloud size={16} />}
         {busy ? "Procesando..." : "Comparar"}
       </button>
+      {needsOrg && <p className="mt-2 text-xs text-[var(--mut)]">Selecciona la organización para habilitar la comparación.</p>}
 
       {res && !res.ok && (
         <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{res.error}</p>

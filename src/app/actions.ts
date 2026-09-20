@@ -20,7 +20,7 @@ export interface RunResult {
 }
 
 // Barrido + guardado (compartido por ambos flujos). Recibe la gaceta ya parseada.
-async function sweepAndSave(marks: ClientMark[], parsed: ReturnType<typeof parseGazette>, gazetteDoc: any, t0: number): Promise<RunResult> {
+async function sweepAndSave(marks: ClientMark[], parsed: ReturnType<typeof parseGazette>, gazetteDoc: any, orgId: number | null, t0: number): Promise<RunResult> {
   const { meta, entries, skipped } = parsed;
   const { candidates } = sweep(entries, marks);
   const dto = toReportDTO(candidates, meta, { clientCount: marks.length, gazetteCount: entries.length, skipped });
@@ -29,8 +29,6 @@ async function sweepAndSave(marks: ClientMark[], parsed: ReturnType<typeof parse
   const db = getDb();
   if (db) {
     try {
-      const s = await getSession();
-      const orgId = s?.organizationId ?? null;
       const [row] = await db<{ id: number }[]>`
         INSERT INTO runs (
           country, gazette_number, date_public, date_due, language,
@@ -60,9 +58,25 @@ async function requireUploader(): Promise<RunResult | null> {
   return null;
 }
 
+/** Resuelve la organización de la corrida: el superadmin la elige; validada contra la BD. */
+async function resolveRunOrg(organizationId: number | null): Promise<number | null | RunResult> {
+  const s = await getSession();
+  // superadmin puede elegir cualquiera; otros roles quedan atados a la suya
+  if (s?.role !== "superadmin") return s?.organizationId ?? null;
+  if (organizationId == null) return { ok: false, error: "Elige una organización para la corrida." };
+  const db = getDb();
+  if (db) {
+    const [o] = await db<{ id: number }[]>`SELECT id FROM organizations WHERE id = ${organizationId}`;
+    if (!o) return { ok: false, error: "Organización no válida." };
+  }
+  return organizationId;
+}
+
 /** Compara subiendo AMBOS archivos (cartera + gaceta). Funciona sin BD. */
-export async function runComparison(clientText: string, gazetteText: string): Promise<RunResult> {
+export async function runComparison(clientText: string, gazetteText: string, organizationId: number | null = null): Promise<RunResult> {
   const denied = await requireUploader(); if (denied) return denied;
+  const org = await resolveRunOrg(organizationId);
+  if (org && typeof org === "object") return org;
   const t0 = Date.now();
   let clientRows: any, gazetteDoc: any;
   try {
@@ -73,12 +87,15 @@ export async function runComparison(clientText: string, gazetteText: string): Pr
   }
   if (!Array.isArray(clientRows)) return { ok: false, error: "La cartera debe ser un arreglo JSON (casos.json)." };
   if (!gazetteDoc?.details) return { ok: false, error: "La gaceta no tiene 'details'. ¿Es el JSON correcto?" };
-  return sweepAndSave(parseClientMarks(clientRows), parseGazette(gazetteDoc), gazetteDoc, t0);
+  return sweepAndSave(parseClientMarks(clientRows), parseGazette(gazetteDoc), gazetteDoc, org as number | null, t0);
 }
 
 /** Compara usando la cartera ya importada en la BD; solo se sube la gaceta. */
-export async function runComparisonFromDb(gazetteText: string): Promise<RunResult> {
+export async function runComparisonFromDb(gazetteText: string, organizationId: number | null = null): Promise<RunResult> {
   const denied = await requireUploader(); if (denied) return denied;
+  const org = await resolveRunOrg(organizationId);
+  if (org && typeof org === "object") return org;
+  const orgId = org as number | null;
   const t0 = Date.now();
   let gazetteDoc: any;
   try {
@@ -88,13 +105,12 @@ export async function runComparisonFromDb(gazetteText: string): Promise<RunResul
   }
   if (!gazetteDoc?.details) return { ok: false, error: "La gaceta no tiene 'details'. ¿Es el JSON correcto?" };
   const parsed = parseGazette(gazetteDoc);
-  const s = await getSession();
-  // Aplica el perfil de vigilancia del país de la gaceta (subconjunto de la cartera).
-  const marks = await loadMarksFromDb({ orgId: s?.organizationId ?? null, country: parsed.meta.country });
+  // Aplica el perfil de vigilancia del país de la gaceta para la organización elegida.
+  const marks = await loadMarksFromDb({ orgId, country: parsed.meta.country });
   if (!marks.length) {
     return { ok: false, error: "No hay marcas de cartera para vigilar en este país. Revisa el perfil de vigilancia en Países, o importa la cartera." };
   }
-  return sweepAndSave(marks, parsed, gazetteDoc, t0);
+  return sweepAndSave(marks, parsed, gazetteDoc, orgId, t0);
 }
 
 /** Importa/reemplaza la cartera del cliente en la BD. */
