@@ -78,10 +78,36 @@ export async function createApprovedPdf(groups: PubDTO[], meta: ReportDTO["meta"
 
 const cut = (s: string, n = 150) => (s && s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s || "—");
 
+const normImg = (s: string) => (s || "").replace(/\.(webp|png|jpe?g)$/i, "");
+
+/** Descarga una imagen y la convierte a JPEG dataURL (jsPDF no lee webp fiable). */
+async function urlToJpeg(url: string, max = 320): Promise<{ dataUrl: string; w: number; h: number } | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const bmp = await createImageBitmap(await res.blob());
+    const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale)), h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bmp, 0, 0, w, h);
+    return { dataUrl: canvas.toDataURL("image/jpeg", 0.85), w, h };
+  } catch { return null; }
+}
+
 /** Reporte profesional: portada + tabla consolidada + una ficha por caso. */
-export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"]) {
+export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"], images: Record<string, string> = {}) {
   const [{ jsPDF }, { autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
   const items = groups.flatMap((g) => g.candidates.map((c) => ({ g, c })));
+
+  // Prefetch de imágenes de publicación (una vez por id) → JPEG dataURL.
+  const pics = new Map<string, { dataUrl: string; w: number; h: number }>();
+  const wanted = new Map<string, string>();
+  for (const g of groups) { const u = images[normImg(g.image)]; if (u) wanted.set(normImg(g.image), u); }
+  await Promise.all([...wanted].map(async ([k, u]) => { const d = await urlToJpeg(u); if (d) pics.set(k, d); }));
   const nOpp = items.filter((x) => x.c.ai?.recommendation === "file_opposition").length;
   const nMon = items.filter((x) => x.c.ai?.recommendation === "monitor_closely").length;
 
@@ -168,6 +194,14 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"])
     doc.setFont("helvetica", "normal");
     let yL = y + 6 + gL.length * 4.6 + 1.5;
     let yR = y + 6 + cL.length * 4.6 + 1.5;
+
+    // Imagen de la publicación (si existe)
+    const pim = pics.get(normImg(g.image));
+    if (pim) {
+      const boxW = 42, ih = Math.min(32, boxW * pim.h / pim.w);
+      try { doc.addImage(pim.dataUrl, "JPEG", xL, yL, boxW, ih); } catch { /* omite si falla */ }
+      yL += ih + 3;
+    }
 
     yL = field(xL, yL, "Expediente", g.applicationNumber, colW);
     yL = field(xL, yL, "Tipo", g.markType, colW);
