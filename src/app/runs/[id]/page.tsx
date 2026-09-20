@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getReviews } from "@/lib/reviews";
+import { publicImageUrl } from "@/lib/publications";
 import Results from "@/app/_components/Results";
 import type { ReportDTO } from "@/lib/dto";
 
@@ -22,6 +23,17 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   const reviews = await getReviews(Number(id));
   const canEdit = true; // workspace compartido: cualquier usuario puede revisar/exportar
 
+  // Imágenes de las publicaciones de esta corrida (id de imagen SIC → URL pública).
+  const imgRows = await db<{ image_id: string; bucket: string; path: string }[]>`
+    SELECT DISTINCT p.image_id, mi.bucket, mi.path
+    FROM publications p JOIN mark_images mi ON mi.image_id = p.image_id
+    WHERE p.run_id = ${Number(id)} AND p.image_id IS NOT NULL AND p.image_id <> ''`;
+  const images: Record<string, string> = {};
+  for (const r of imgRows) {
+    const url = publicImageUrl(r.bucket, r.path);
+    if (url) images[r.image_id] = url;
+  }
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -33,7 +45,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
           Ver publicación completa →
         </Link>
       </div>
-      <Results dto={row.payload} runId={Number(id)} reviews={reviews} canEdit={canEdit} />
+      <Results dto={row.payload} runId={Number(id)} reviews={reviews} canEdit={canEdit} images={images} />
     </div>
   );
 }

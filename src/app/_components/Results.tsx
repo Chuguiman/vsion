@@ -8,6 +8,7 @@ import { analyzeBatchAction, setReviewAction } from "../actions";
 import type { ReviewStatus } from "@/lib/reviews";
 import BarcodeStat, { type Seg } from "./BarcodeStat";
 import CandCard from "./CandCard";
+import ZoomImage from "./ZoomImage";
 
 const C = { red: "#ef4444", amber: "#f59e0b", blue: "#3b82f6", violet: "#8b5cf6", muted: "#71717a", green: "#10b981" };
 
@@ -121,21 +122,28 @@ function Row({ c, pub, reviewable, status, onReview }: {
   );
 }
 
-function Pub({ g, filter, reviewable, reviews, onReview }: {
-  g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; onReview: (key: string, s: ReviewStatus | null) => void;
+function Pub({ g, filter, reviewable, reviews, onReview, imageUrl }: {
+  g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; onReview: (key: string, s: ReviewStatus | null) => void; imageUrl?: string;
 }) {
   const rows = g.candidates.filter((c) => matchesFilter(c, filter));
   if (!rows.length) return null;
   return (
     <section className="mb-4 overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
-      <header className="border-b border-[var(--bd)] px-4 py-3">
-        <h2 className="text-base font-semibold">{g.denom}</h2>
-        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--mut)]">
-          <span className="font-mono">{g.applicationNumber}</span>
-          <span>{g.markType}</span>
-          <span>Clases: {g.classes.join(", ") || "—"}</span>
-          <span>Solicitante: {g.applicant || "—"}</span>
-          {g.representant && <span>Apoderado: <span className="font-medium text-teal-300">{g.representant}</span></span>}
+      <header className="flex items-start gap-3 border-b border-[var(--bd)] px-4 py-3">
+        <span className="mt-0.5 shrink-0">
+          {imageUrl
+            ? <ZoomImage src={imageUrl} alt={g.denom || "Figurativa"} size={44} />
+            : <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-dashed border-[var(--bd)] text-[10px] text-[var(--mut)]">s/img</span>}
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-semibold">{g.denom}</h2>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--mut)]">
+            <span className="font-mono">{g.applicationNumber}</span>
+            <span>{g.markType}</span>
+            <span>Clases: {g.classes.join(", ") || "—"}</span>
+            <span>Solicitante: {g.applicant || "—"}</span>
+            {g.representant && <span>Apoderado: <span className="font-medium text-teal-300">{g.representant}</span></span>}
+          </div>
         </div>
       </header>
       {/* Desktop: tabla densa */}
@@ -166,8 +174,8 @@ function Pub({ g, filter, reviewable, reviews, onReview }: {
   );
 }
 
-export default function Results({ dto, runId, reviews: initialReviews, canEdit = false }: {
-  dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>; canEdit?: boolean;
+export default function Results({ dto, runId, reviews: initialReviews, canEdit = false, images = {} }: {
+  dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>; canEdit?: boolean; images?: Record<string, string>;
 }) {
   const [selectedFilter, setFilter] = useState<Filter | null>(null);
   const [ai, setAi] = useState<{ running: boolean; analyzed: number; total: number; error?: string } | null>(null);
@@ -348,7 +356,7 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
       {(reviewError || exportError) && <p role="alert" className="mb-4 text-sm text-red-300">{reviewError || exportError}</p>}
 
       {visible.length ? visible.map((g) => (
-        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} />
+        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} imageUrl={images[g.image]} />
       )) : <p className="text-[var(--mut)]">Sin resultados para este filtro.</p>}
     </div>
   );

@@ -34,8 +34,8 @@ export default function NavMenu({ links, userName, avatar }: { links: NavLink[];
 
   const LogoutForm = () => (
     <form action={logoutAction}>
-      <button aria-label="Salir" title="Salir" className="sidebar-logout flex items-center gap-1 rounded-md border border-[var(--bd)] px-2 py-1 text-xs text-[var(--mut)] hover:text-[var(--tx)]">
-        <LogOut size={13} /> <span className="sidebar-label">Salir</span>
+      <button aria-label="Salir" title="Salir" className="sidebar-logout flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-[var(--mut)] transition hover:bg-red-500/10 hover:text-red-400">
+        <LogOut size={16} /> <span className="sidebar-label">Salir</span>
       </button>
     </form>
   );
