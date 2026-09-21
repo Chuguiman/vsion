@@ -129,11 +129,14 @@ function Row({ c, pub, reviewable, status, reviewer, onReview }: {
   );
 }
 
-function Pub({ g, filter, reviewable, reviews, reviewers, onReview, imageUrl }: {
-  g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; reviewers: Record<string, string>; onReview: (key: string, s: ReviewStatus | null) => void; imageUrl?: string;
+function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGroup, imageUrl }: {
+  g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; reviewers: Record<string, string>; onReview: (key: string, s: ReviewStatus | null) => void; onDiscardGroup?: (keys: string[]) => void; imageUrl?: string;
 }) {
   const rows = g.candidates.filter((c) => matchesFilter(c, filter));
   if (!rows.length) return null;
+  const pendingKeys = rows
+    .filter((c) => ((reviews[candKeyOf(g, c)] as ReviewStatus | undefined) ?? "pending") === "pending")
+    .map((c) => candKeyOf(g, c));
   return (
     <section className="mb-4 overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
       <header className="flex items-start gap-3 border-b border-[var(--bd)] px-4 py-3">
@@ -157,6 +160,13 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, imageUrl }: 
             </p>
           )}
         </div>
+        {reviewable && onDiscardGroup && pendingKeys.length > 0 && (
+          <button onClick={() => onDiscardGroup(pendingKeys)}
+            title="Descartar todas las pendientes de esta publicación"
+            className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-lg border border-red-500/40 px-2.5 py-1 text-xs text-red-300 transition hover:bg-red-500/10">
+            <X size={13} /> Descartar todas ({pendingKeys.length})
+          </button>
+        )}
       </header>
       {/* Desktop: tabla densa */}
       <table className="hidden w-full text-left sm:table">
@@ -301,11 +311,11 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
     if (st === "pending") pendingInView.push(candKeyOf(g, c));
   }
 
-  async function discardAllPending() {
+  async function discardKeys(rawKeys: string[], opts?: { confirm?: boolean }) {
     if (!runId || bulkBusy) return;
-    const keys = pendingInView.filter((k) => !savingReviews.current.has(k));
+    const keys = rawKeys.filter((k) => !savingReviews.current.has(k));
     if (!keys.length) return;
-    if (!confirm(`¿Descartar ${keys.length} ${keys.length === 1 ? "pendiente" : "pendientes"} de esta vista? Podrás devolver alguna a pendiente después.`)) return;
+    if (opts?.confirm && !confirm(`¿Descartar ${keys.length} ${keys.length === 1 ? "pendiente" : "pendientes"}? Podrás devolver alguna a pendiente después.`)) return;
     setBulkBusy(true);
     setReviewError(null);
     const prev = keys.map((k) => ({ k, s: reviews[k], w: reviewers[k] }));
@@ -440,7 +450,7 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
         )}
 
         {reviewable && pendingInView.length > 0 && (
-          <button onClick={discardAllPending} disabled={bulkBusy || savingCount > 0}
+          <button onClick={() => discardKeys(pendingInView, { confirm: true })} disabled={bulkBusy || savingCount > 0}
             title="Descarta de un golpe todas las pendientes de la vista actual"
             className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40">
             {bulkBusy ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />} Descartar pendientes ({pendingInView.length})
@@ -472,7 +482,7 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
       {(reviewError || exportError) && <p role="alert" className="mb-4 text-sm text-red-300">{reviewError || exportError}</p>}
 
       {visible.length ? visible.map((g) => (
-        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} reviewers={reviewers} onReview={onReview} imageUrl={images[g.image?.replace(/\.(webp|png|jpe?g)$/i, "")]} />
+        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} reviewers={reviewers} onReview={onReview} onDiscardGroup={(keys) => discardKeys(keys)} imageUrl={images[g.image?.replace(/\.(webp|png|jpe?g)$/i, "")]} />
       )) : <p className="text-[var(--mut)]">Sin resultados para este filtro.</p>}
     </div>
   );
