@@ -81,7 +81,6 @@ export default function CandCard({ c, candKey, status, reviewer, reviewable, onR
             <ClassChips classes={c.clientClasses} pys={c.clientPys} match={c.matchingClasses} related={c.relatedClasses} />
           )}
         </div>
-        {c.clientPys && <p className="mt-2 text-xs text-[var(--mut)]"><span className="text-[var(--tx)]">P/S:</span> {c.clientPys}</p>}
         {c.ai?.summary && <p className="mt-2 text-xs text-[var(--mut)]">{c.ai.summary}</p>}
 
         {reviewable && (

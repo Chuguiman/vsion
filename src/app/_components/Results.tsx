@@ -101,7 +101,6 @@ function Row({ c, pub, reviewable, status, reviewer, onReview }: {
         <div className={`font-semibold ${dim ? "line-through" : ""}`}>{c.clientDenom}</div>
         <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
         {c.clientHolder && <div className="text-xs text-blue-300">Titular: {c.clientHolder}</div>}
-        {c.clientPys && <div className="mt-1 max-w-xs text-xs text-[var(--mut)]" title={c.clientPys}>P/S: {c.clientPys}</div>}
       </td>
       <td className="px-4 py-2.5 align-top"><ClassChips classes={c.clientClasses} pys={c.clientPys} match={c.matchingClasses} related={c.relatedClasses} /></td>
       <td className="px-4 py-2.5"><RelationCell c={c} /></td>
@@ -144,11 +143,6 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGro
               <span className="pt-0.5">Clases:</span>
               <ClassChips classes={g.classes} pys={g.pys} />
             </div>
-          )}
-          {g.pys && (
-            <p className="mt-1.5 text-xs text-[var(--mut)]" title={g.pys}>
-              <span className="font-medium text-[var(--tx)]">Productos/servicios: </span>{g.pys}
-            </p>
           )}
         </div>
         {reviewable && onDiscardGroup && pendingKeys.length > 0 && (
