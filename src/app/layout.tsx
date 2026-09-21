@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { LogOut, Search, UserCircle } from "lucide-react";
 import { getSession } from "@/lib/auth";
 import { getAvatar } from "@/lib/users";
 import NavMenu, { type NavLink } from "./_components/NavMenu";
 import ThemeToggle from "./_components/ThemeToggle";
+import { logoutAction } from "./auth-actions";
 import "flag-icons/css/flag-icons.min.css";
 import "./globals.css";
 
@@ -42,10 +43,30 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Search size={18} className="shrink-0 text-[var(--acc)]" /> <span className="sidebar-label">vsion</span>
             </Link>
             {session && <NavMenu links={links} userName={session.name} avatar={avatar} />}
-            <ThemeToggle showLabel={!!session} className={session ? "" : "ml-auto"} />
+            <ThemeToggle className={session ? "lg:hidden" : "ml-auto"} />
           </div>
         </header>
         <div className={session ? "app-content lg:pl-64" : ""}>
+          {session && (
+            <header aria-label="Cuenta y apariencia" className="sticky top-0 z-30 hidden border-b border-[var(--bd)] bg-[var(--bg2)] lg:block">
+              <div className="mx-auto flex min-h-18 max-w-6xl items-center justify-end gap-4 px-8 py-3">
+                <Link href="/perfil" aria-label={`Perfil de ${session.name}`} title={session.name}
+                  className="flex min-w-0 items-center gap-3 rounded-lg hover:text-[var(--acc)]">
+                  {avatar
+                    ? <img src={avatar} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover" />
+                    : <UserCircle size={36} className="shrink-0 text-[var(--mut)]" />}
+                  <span className="max-w-64 truncate text-sm font-medium">{session.name}</span>
+                </Link>
+                <div className="h-6 w-px bg-[var(--bd)]" aria-hidden="true" />
+                <ThemeToggle showLabel />
+                <form action={logoutAction}>
+                  <button type="submit" className="flex h-9 items-center gap-2 rounded-lg px-3 text-sm text-[var(--mut)] transition hover:bg-red-500/10 hover:text-red-400">
+                    <LogOut size={16} aria-hidden="true" /> Salir
+                  </button>
+                </form>
+              </div>
+            </header>
+          )}
           <main className="mx-auto min-w-0 max-w-6xl px-4 py-8 lg:px-8">{children}</main>
         </div>
       </body>

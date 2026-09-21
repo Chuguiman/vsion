@@ -55,14 +55,6 @@ export default function NavMenu({ links, userName, avatar }: { links: NavLink[];
           </Link>
         ))}
       </nav>
-      <div className="hidden shrink-0 flex-col gap-3 border-t border-[var(--bd)] pt-4 text-sm lg:flex">
-        <Link href="/perfil" aria-label={`Perfil de ${userName}`} title={userName} className="sidebar-profile flex min-w-0 items-center gap-3">
-          <span className="shrink-0"><Avatar size={40} /></span>
-          <span className="sidebar-label truncate">{userName}</span>
-        </Link>
-        <LogoutForm />
-      </div>
-
       {/* Móvil: botón hamburguesa */}
       <button onClick={() => setOpen(true)} className="ml-auto text-[var(--tx)] lg:hidden" aria-label="Menú" aria-expanded={open}>
         <MenuIcon size={22} />

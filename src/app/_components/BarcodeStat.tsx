@@ -11,20 +11,20 @@ export interface Seg {
  * Widget de distribución estilo "código de barras" con porcentajes por segmento.
  * Si se pasa onSelect, cada segmento es clicable y actúa como filtro.
  */
-export default function BarcodeStat({ segments, total, activeId, onSelect }: {
-  segments: Seg[]; total?: number; activeId?: string | null; onSelect?: (id: string) => void;
+export default function BarcodeStat({ segments, total, activeId, onSelect, compact = false }: {
+  segments: Seg[]; total?: number; activeId?: string | null; onSelect?: (id: string) => void; compact?: boolean;
 }) {
   const sum = total ?? segments.reduce((a, s) => a + s.value, 0);
   const pct = (v: number) => (sum > 0 ? (100 * v) / sum : 0);
   const visible = segments.filter((s) => s.value > 0);
-  if (!visible.length) return null;
+  if (!visible.length) return compact ? <span className="text-xs text-[var(--mut)]">Sin candidatos</span> : null;
   const interactive = !!onSelect;
   const someActive = interactive && visible.some((s) => s.id === activeId);
 
   return (
-    <div className="rounded-2xl border border-[var(--bd)] bg-[var(--bg2)] p-4">
+    <div className={compact ? "min-w-72" : "rounded-2xl border border-[var(--bd)] bg-[var(--bg2)] p-4"}>
       {/* etiquetas + % (clicables si hay filtro) */}
-      <div className="flex items-end gap-2">
+      <div className={compact ? "hidden" : "flex items-end gap-2"}>
         {visible.map((s) => {
           const active = s.id === activeId;
           const faded = someActive && !active;
@@ -48,11 +48,11 @@ export default function BarcodeStat({ segments, total, activeId, onSelect }: {
         })}
       </div>
       {/* barras */}
-      <div className="mt-3 flex h-12 gap-1.5 overflow-hidden rounded-lg">
+      <div className={compact ? "flex h-6 gap-1 overflow-hidden rounded-md" : "mt-3 flex h-12 gap-1.5 overflow-hidden rounded-lg"}>
         {visible.map((s) => {
           const faded = someActive && s.id !== activeId;
           return (
-            <div key={s.id} onClick={interactive ? () => onSelect!(s.id) : undefined}
+            <div key={s.id} title={`${s.label}: ${s.value} (${Math.round(pct(s.value))}%)`} onClick={interactive ? () => onSelect!(s.id) : undefined}
               style={{
                 flexGrow: Math.max(pct(s.value), 6),
                 backgroundColor: `color-mix(in srgb, ${s.color} 18%, transparent)`,
@@ -64,7 +64,7 @@ export default function BarcodeStat({ segments, total, activeId, onSelect }: {
         })}
       </div>
       {/* leyenda con conteos */}
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--mut)]">
+      <div className={compact ? "mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[10px] leading-tight text-[var(--mut)]" : "mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--mut)]"}>
         {visible.map((s) => (
           <span key={s.id} className="inline-flex items-center gap-1.5">
             <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: s.color }} />

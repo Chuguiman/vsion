@@ -39,8 +39,8 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
-        <Link href="/historial" className="inline-block text-sm text-[var(--mut)] hover:text-[var(--tx)]">
-          ← Vigilancia
+        <Link href="/historial" className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2 text-sm font-medium text-[var(--tx)] transition hover:border-[var(--acc)] hover:text-[var(--acc)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--acc)]">
+          ← Ir a Vigilancia
         </Link>
         <Link href={`/runs/${id}/publicaciones`}
           className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--bd)] px-3 py-1.5 text-sm text-[var(--mut)] hover:text-[var(--tx)]">
