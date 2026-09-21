@@ -20,7 +20,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   if (!row) return notFound();
   const session = await getSession();
   if (!session) return notFound();
-  const reviews = await getReviews(Number(id));
+  const { statuses, reviewers } = await getReviews(Number(id));
   const canEdit = true; // workspace compartido: cualquier usuario puede revisar/exportar
 
   // Imágenes de las publicaciones de esta corrida (id de imagen SIC → URL pública).
@@ -47,7 +47,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
           Ver publicación completa →
         </Link>
       </div>
-      <Results dto={row.payload} runId={Number(id)} reviews={reviews} canEdit={canEdit} images={images} />
+      <Results dto={row.payload} runId={Number(id)} reviews={statuses} reviewers={reviewers} canEdit={canEdit} images={images} currentUser={session.name || session.email} />
     </div>
   );
 }

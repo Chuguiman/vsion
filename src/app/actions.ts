@@ -7,8 +7,9 @@ import { getDb } from "@/lib/db";
 import { savePublications } from "@/lib/publications";
 import { importCartera, loadMarksFromDb, getCarteraInfo } from "@/lib/cartera";
 import { analyzeRunBatch, type BatchResult } from "@/lib/ai-web";
-import { setReview, type ReviewStatus } from "@/lib/reviews";
+import { setReview, getReviews, type ReviewStatus, type RunReviews } from "@/lib/reviews";
 import { getSession } from "@/lib/auth";
+import { mintSupabaseToken, realtimeTokenTtl } from "@/lib/supabase-token";
 import type { ClientMark } from "@/types";
 
 export interface RunResult {
@@ -158,14 +159,34 @@ export async function deleteRunAction(runId: number): Promise<{ ok: boolean; err
   }
 }
 
-/** Fase 3: fija/limpia la decisión humana de un candidato. */
+/** Fase 3: fija/limpia la decisión humana de un candidato (registra quién). */
 export async function setReviewAction(runId: number, candKey: string, status: ReviewStatus | null): Promise<{ ok: boolean; error?: string }> {
   try {
     const s = await getSession();
     if (!s) return { ok: false, error: "No autenticado." };
-    await setReview(runId, candKey, status);
+    await setReview(runId, candKey, status, { id: s.userId, name: s.name || s.email });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
   }
+}
+
+/** Re-lee los estados+atribución de una corrida (resync tras (re)conectar Realtime). */
+export async function getReviewsAction(runId: number): Promise<RunReviews> {
+  const s = await getSession();
+  if (!s) return { statuses: {}, reviewers: {} };
+  return getReviews(runId);
+}
+
+/**
+ * Emite un token Supabase (rol authenticated) para que el cliente se suscriba a
+ * Realtime. Solo para usuarios logueados. Devuelve null si no hay sesión o no
+ * está configurado SUPABASE_JWT_SECRET → el cliente no activa el sync en vivo.
+ */
+export async function getRealtimeTokenAction(): Promise<{ token: string; ttl: number } | null> {
+  const s = await getSession();
+  if (!s) return null;
+  const token = await mintSupabaseToken(s);
+  if (!token) return null;
+  return { token, ttl: realtimeTokenTtl() };
 }

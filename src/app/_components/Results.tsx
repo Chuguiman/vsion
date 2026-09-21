@@ -4,8 +4,9 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrainCircuit, Loader2, Check, X, Download, ChevronDown } from "lucide-react";
 import type { ReportDTO, PubDTO, CandDTO, Relation, AiVerdict } from "@/lib/dto";
-import { analyzeBatchAction, setReviewAction } from "../actions";
+import { analyzeBatchAction, setReviewAction, getReviewsAction } from "../actions";
 import type { ReviewStatus } from "@/lib/reviews";
+import { useRealtimeReviews } from "./useRealtimeReviews";
 import BarcodeStat, { type Seg } from "./BarcodeStat";
 import CandCard from "./CandCard";
 import ZoomImage from "./ZoomImage";
@@ -97,8 +98,8 @@ function ReviewCell({ status, onSet }: { status?: ReviewStatus; onSet: (s: Revie
   );
 }
 
-function Row({ c, pub, reviewable, status, onReview }: {
-  c: CandDTO; pub: PubDTO; reviewable: boolean; status?: ReviewStatus; onReview: (key: string, s: ReviewStatus | null) => void;
+function Row({ c, pub, reviewable, status, reviewer, onReview }: {
+  c: CandDTO; pub: PubDTO; reviewable: boolean; status?: ReviewStatus; reviewer?: string; onReview: (key: string, s: ReviewStatus | null) => void;
 }) {
   const col = scoreColor(c.score);
   const dim = status === "discarded";
@@ -117,13 +118,18 @@ function Row({ c, pub, reviewable, status, onReview }: {
       </td>
       <td className="px-4 py-2.5"><ClassBadges clientClasses={c.clientClasses} match={c.matchingClasses} related={c.relatedClasses} /></td>
       <td className="px-4 py-2.5"><RelationCell c={c} /></td>
-      {reviewable && <td className="px-4 py-2.5"><ReviewCell status={status} onSet={(s) => onReview(candKeyOf(pub, c), s)} /></td>}
+      {reviewable && (
+        <td className="px-4 py-2.5">
+          <ReviewCell status={status} onSet={(s) => onReview(candKeyOf(pub, c), s)} />
+          {status && reviewer && <div className="mt-1 text-[10px] text-[var(--mut)]">por {reviewer}</div>}
+        </td>
+      )}
     </tr>
   );
 }
 
-function Pub({ g, filter, reviewable, reviews, onReview, imageUrl }: {
-  g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; onReview: (key: string, s: ReviewStatus | null) => void; imageUrl?: string;
+function Pub({ g, filter, reviewable, reviews, reviewers, onReview, imageUrl }: {
+  g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; reviewers: Record<string, string>; onReview: (key: string, s: ReviewStatus | null) => void; imageUrl?: string;
 }) {
   const rows = g.candidates.filter((c) => matchesFilter(c, filter));
   if (!rows.length) return null;
@@ -158,7 +164,7 @@ function Pub({ g, filter, reviewable, reviews, onReview, imageUrl }: {
           </tr>
         </thead>
         <tbody>{rows.map((c) => (
-          <Row key={candKeyOf(g, c)} c={c} pub={g} reviewable={reviewable} status={reviews[candKeyOf(g, c)]} onReview={onReview} />
+          <Row key={candKeyOf(g, c)} c={c} pub={g} reviewable={reviewable} status={reviews[candKeyOf(g, c)]} reviewer={reviewers[candKeyOf(g, c)]} onReview={onReview} />
         ))}</tbody>
       </table>
 
@@ -167,19 +173,20 @@ function Pub({ g, filter, reviewable, reviews, onReview, imageUrl }: {
         {reviewable && <p className="text-[11px] text-[var(--mut)]">Desliza → aprobar · ← descartar</p>}
         {rows.map((c) => (
           <CandCard key={candKeyOf(g, c)} c={c} candKey={candKeyOf(g, c)} reviewable={reviewable}
-            status={reviews[candKeyOf(g, c)]} onReview={onReview} />
+            status={reviews[candKeyOf(g, c)]} reviewer={reviewers[candKeyOf(g, c)]} onReview={onReview} />
         ))}
       </div>
     </section>
   );
 }
 
-export default function Results({ dto, runId, reviews: initialReviews, canEdit = false, images = {} }: {
-  dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>; canEdit?: boolean; images?: Record<string, string>;
+export default function Results({ dto, runId, reviews: initialReviews, reviewers: initialReviewers, canEdit = false, images = {}, currentUser }: {
+  dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>; reviewers?: Record<string, string>; canEdit?: boolean; images?: Record<string, string>; currentUser?: string;
 }) {
   const [selectedFilter, setFilter] = useState<Filter | null>(null);
   const [ai, setAi] = useState<{ running: boolean; analyzed: number; total: number; error?: string } | null>(null);
   const [reviews, setReviews] = useState<Record<string, ReviewStatus>>(initialReviews ?? {});
+  const [reviewers, setReviewers] = useState<Record<string, string>>(initialReviewers ?? {});
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("pending");
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [savingCount, setSavingCount] = useState(0);
@@ -197,32 +204,66 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
   const nApproved = Object.values(reviews).filter((s) => s === "approved").length;
   const nDiscarded = Object.values(reviews).filter((s) => s === "discarded").length;
 
-  async function onReview(key: string, status: ReviewStatus | null) {
-    if (!runId || savingReviews.current.has(key)) return;
-    savingReviews.current.add(key);
-    setSavingCount((n) => n + 1);
-    const previous = reviews[key];
-    setReviewError(null);
+  function applyStatus(key: string, status: ReviewStatus | null, who?: string) {
     setReviews((prev) => {
       const next = { ...prev };
       if (status === null) delete next[key]; else next[key] = status;
       return next;
     });
+    setReviewers((prev) => {
+      const next = { ...prev };
+      if (status === null || !who) delete next[key]; else next[key] = who;
+      return next;
+    });
+  }
+
+  async function onReview(key: string, status: ReviewStatus | null) {
+    if (!runId || savingReviews.current.has(key)) return;
+    savingReviews.current.add(key);
+    setSavingCount((n) => n + 1);
+    const previous = reviews[key];
+    const previousWho = reviewers[key];
+    setReviewError(null);
+    applyStatus(key, status, currentUser); // optimista: mi decisión, atribuida a mí
     try {
       const result = await setReviewAction(runId, key, status);
       if (!result.ok) throw new Error(result.error || "No se pudo guardar la revisión.");
     } catch {
-      setReviews((prev) => {
-        const next = { ...prev };
-        if (previous === undefined) delete next[key]; else next[key] = previous;
-        return next;
-      });
+      applyStatus(key, previous ?? null, previousWho); // rollback
       setReviewError("No se pudo guardar la revisión. Se restauró el estado anterior; vuelve a intentarlo.");
     } finally {
       savingReviews.current.delete(key);
       setSavingCount((n) => n - 1);
     }
   }
+
+  // Sincronización en vivo entre revisores (Supabase Realtime, token firmado).
+  useRealtimeReviews({
+    runId,
+    savingKeys: savingReviews,
+    onRemoteChange: ({ candKey, status, reviewer }) => {
+      if (savingReviews.current.has(candKey)) return; // no pisar mi guardado en curso
+      applyStatus(candKey, status, reviewer ?? undefined);
+    },
+    onResync: async () => {
+      if (!runId) return;
+      const fresh = await getReviewsAction(runId);
+      setReviews((prev) => {
+        const next = { ...fresh.statuses };
+        for (const k of savingReviews.current) { // conserva lo que tengo a medio guardar
+          if (prev[k] !== undefined) next[k] = prev[k]; else delete next[k];
+        }
+        return next;
+      });
+      setReviewers((prev) => {
+        const next = { ...fresh.reviewers };
+        for (const k of savingReviews.current) {
+          if (prev[k] !== undefined) next[k] = prev[k]; else delete next[k];
+        }
+        return next;
+      });
+    },
+  });
 
   async function analyze() {
     if (!runId) return;
@@ -358,7 +399,7 @@ export default function Results({ dto, runId, reviews: initialReviews, canEdit =
       {(reviewError || exportError) && <p role="alert" className="mb-4 text-sm text-red-300">{reviewError || exportError}</p>}
 
       {visible.length ? visible.map((g) => (
-        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} onReview={onReview} imageUrl={images[g.image?.replace(/\.(webp|png|jpe?g)$/i, "")]} />
+        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} reviewers={reviewers} onReview={onReview} imageUrl={images[g.image?.replace(/\.(webp|png|jpe?g)$/i, "")]} />
       )) : <p className="text-[var(--mut)]">Sin resultados para este filtro.</p>}
     </div>
   );

@@ -150,9 +150,44 @@ create table if not exists mark_images (
 -- Fase 3: decisión humana por candidato (aprobar / descartar). Tabla aparte
 -- para no colisionar con la escritura del payload de 'runs' durante el análisis.
 create table if not exists reviews (
-  run_id     bigint not null,
-  cand_key   text   not null,   -- <applicationNumber>::<clientCode>::<clientDenom>
-  status     text   not null check (status in ('approved','discarded')),
-  updated_at timestamptz not null default now(),
+  run_id       bigint not null,
+  cand_key     text   not null,   -- <applicationNumber>::<clientCode>::<clientDenom>
+  status       text   not null check (status in ('approved','discarded')),
+  reviewed_by  bigint,            -- users.id de quién decidió (atribución)
+  reviewer_name text,             -- nombre cacheado para mostrar sin join
+  updated_at   timestamptz not null default now(),
   primary key (run_id, cand_key)
 );
+alter table reviews add column if not exists reviewed_by bigint;
+alter table reviews add column if not exists reviewer_name text;
+
+-- Sincronización en vivo entre revisores (Supabase Realtime).
+-- El servidor escribe con rol postgres (bypassa RLS); el navegador solo LEE,
+-- autenticado con un token firmado (rol authenticated) que emite el server.
+alter table reviews replica identity full;
+do $$ begin
+  if not exists (select 1 from pg_publication_tables
+    where pubname='supabase_realtime' and schemaname='public' and tablename='reviews') then
+    alter publication supabase_realtime add table public.reviews;
+  end if;
+end $$;
+alter table reviews enable row level security;
+grant select on reviews to authenticated;
+drop policy if exists reviews_select_authenticated on reviews;
+create policy reviews_select_authenticated on reviews for select to authenticated using (true);
+
+-- ── Hardening RLS ────────────────────────────────────────────────────────
+-- Todas las tablas del schema public quedan en RLS. Sin política => deny-all
+-- para anon/authenticated (la anon key es pública). El servidor las lee con
+-- rol postgres (BYPASSRLS), así que la app no cambia. Solo 'reviews' tiene
+-- política de lectura (arriba), para el sync en vivo del navegador.
+alter table organizations      enable row level security;
+alter table users              enable row level security;
+alter table runs               enable row level security;
+alter table countries          enable row level security;
+alter table monitored_countries enable row level security;
+alter table client_marks       enable row level security;
+alter table watch_scopes       enable row level security;
+alter table watch_marks        enable row level security;
+alter table publications       enable row level security;
+alter table mark_images        enable row level security;

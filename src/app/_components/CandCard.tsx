@@ -17,8 +17,8 @@ function scoreColor(s: number) { const t = Math.max(0, Math.min(1, (s - 55) / 45
 
 const THRESHOLD = 72;
 
-export default function CandCard({ c, candKey, status, reviewable, onReview }: {
-  c: CandDTO; candKey: string; status?: ReviewStatus; reviewable: boolean;
+export default function CandCard({ c, candKey, status, reviewer, reviewable, onReview }: {
+  c: CandDTO; candKey: string; status?: ReviewStatus; reviewer?: string; reviewable: boolean;
   onReview: (key: string, s: ReviewStatus | null) => void;
 }) {
   const [dx, setDx] = useState(0);
@@ -94,6 +94,7 @@ export default function CandCard({ c, candKey, status, reviewable, onReview }: {
             </button>
           </div>
         )}
+        {reviewable && status && reviewer && <div className="mt-1.5 text-[10px] text-[var(--mut)]">por {reviewer}</div>}
       </div>
     </div>
   );
