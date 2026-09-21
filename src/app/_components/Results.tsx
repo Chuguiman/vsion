@@ -71,7 +71,7 @@ function RelationCell({ c }: { c: CandDTO }) {
         <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${AI_CLASS[c.ai.recommendation]}`}>{AI_LABEL[c.ai.recommendation]}</span>
         <span className="ml-1 text-[11px] text-[var(--mut)]">{c.ai.prob}%</span>
         {c.ai.summary && (
-          <details className="mt-1">
+          <details open className="mt-1">
             <summary className="cursor-pointer text-[11px] text-[var(--acc)]">análisis</summary>
             <p className="mt-1 max-w-xs text-[11px] text-[var(--mut)]">{c.ai.summary}</p>
           </details>
