@@ -4,8 +4,54 @@ const verdicts: Record<AiVerdict, string> = {
   file_opposition: "Oponerse", monitor_closely: "Vigilar", no_action: "Sin acción",
 };
 
+/** Mantiene separados los avisos, las coincidencias internas y los terceros. */
+export function reportGroups(groups: PubDTO[], relation: "firm" | "own" | "conflict") {
+  return groups.map((g) => ({ ...g, candidates: g.candidates.filter((c) => c.relation === relation) }))
+    .filter((g) => g.candidates.length > 0);
+}
+
+export async function createSectionPdf(groups: PubDTO[], meta: ReportDTO["meta"], section: "firm" | "own") {
+  const selected = reportGroups(groups, section);
+  if (!selected.length) throw new Error("No hay registros para este reporte.");
+  const [{ jsPDF }, { autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
+  const doc = new jsPDF({ orientation: "landscape", format: "a4" });
+  const title = section === "firm" ? "Tu firma | Conflictos internos del portafolio" : "Aviso de publicación";
+  doc.setProperties({ title, subject: `Gaceta ${meta.country}${meta.number}`, creator: "vsion" });
+  doc.setFontSize(17);
+  doc.text(`vsion | ${title}`, 14, 17);
+  doc.setFontSize(10);
+  doc.text(`Gaceta ${meta.country}${meta.number} | Publicación: ${meta.datePublic}`, 14, 25);
+  const publications = [...new Map(selected.map((g) => [g.applicationNumber || g.denom, g])).values()];
+  const pairs = selected.flatMap((g) => g.candidates.map((c) => ({ g, c })));
+  const description = section === "firm"
+    ? `${pairs.length} coincidencias para revisión interna entre marcas representadas por tu firma. Posibles conflictos dentro del portafolio de la organización.`
+    : `${publications.length} marcas propias publicadas. Aviso informativo de publicación en gaceta.`;
+  doc.text(doc.splitTextToSize(description, 269), 14, 33);
+  autoTable(doc, {
+    startY: 46, margin: { top: 14, bottom: 18, left: 14, right: 14 },
+    head: section === "firm"
+      ? [["Marca publicada / expediente", "Solicitante / apoderado", "Marca del portafolio / código", "Titular / apoderado", "Clases pub. / cartera", "Similitud"]]
+      : [["Marca publicada", "Expediente", "Titular / solicitante", "Apoderado", "Tipo de marca", "Clases Niza"]],
+    body: section === "firm"
+      ? pairs.map(({ g, c }) => [
+          `${g.denom}\n${g.applicationNumber}`, `${g.applicant}\n${g.representant}`,
+          `${c.clientDenom}\n${c.clientCode}`, `${c.clientHolder}\n${c.clientAttorney}`,
+          `${g.classes.join(", ") || "-"} / ${c.clientClasses.join(", ") || "-"}`, `${c.score} / 100`,
+        ])
+      : publications.map((g) => [g.denom, g.applicationNumber, g.applicant, g.representant, g.markType, g.classes.join(", ") || "-"]),
+    styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" },
+    headStyles: { fillColor: section === "firm" ? [109, 76, 181] : [37, 99, 180] },
+    rowPageBreak: "avoid",
+    didDrawPage: () => {
+      doc.setFontSize(8);
+      doc.text(`vsion | ${section === "firm" ? "Tu firma - Revisión interna" : "Aviso de publicación"} | Página ${doc.getNumberOfPages()}`, 14, 202);
+    },
+  });
+  return doc.output("blob");
+}
+
 export function approvedExportRows(groups: PubDTO[]) {
-  return groups.flatMap((g) => g.candidates.map((c) => ({
+  return reportGroups(groups, "conflict").flatMap((g) => g.candidates.map((c) => ({
     "Publicación": g.denom,
     "Expediente": g.applicationNumber,
     "Tipo de marca": g.markType,
@@ -100,6 +146,7 @@ async function urlToJpeg(url: string, max = 320): Promise<{ dataUrl: string; w: 
 
 /** Reporte profesional: portada + tabla consolidada + una ficha por caso. */
 export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"], images: Record<string, string> = {}) {
+  groups = reportGroups(groups, "conflict");
   const [{ jsPDF }, { autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
   const items = groups.flatMap((g) => g.candidates.map((c) => ({ g, c })));
 
