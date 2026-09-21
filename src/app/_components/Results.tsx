@@ -141,7 +141,7 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGro
           {g.classes.length > 0 && (
             <div className="mt-1 flex flex-wrap items-start gap-x-2 gap-y-1 text-xs text-[var(--mut)]">
               <span className="pt-0.5">Clases:</span>
-              <ClassChips classes={g.classes} pys={g.pys} />
+              <ClassChips classes={g.classes} pys={g.pys} wide />
             </div>
           )}
         </div>

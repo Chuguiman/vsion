@@ -8,15 +8,15 @@ import { pysByClass } from "@/lib/pys";
  * descripción individual, extraída del texto de productos/servicios de esa
  * marca (pys). Opcionalmente resalta clases en común (match) y relacionadas.
  */
-export default function ClassChips({ classes, pys, match = [], related = [] }: {
-  classes: number[]; pys: string; match?: number[]; related?: number[];
+export default function ClassChips({ classes, pys, match = [], related = [], wide = false }: {
+  classes: number[]; pys: string; match?: number[]; related?: number[]; wide?: boolean;
 }) {
   const [open, setOpen] = useState<number | null>(null);
   const desc = useMemo(() => pysByClass(pys, classes), [pys, classes]);
   if (!classes.length) return <span className="text-[var(--mut)]">—</span>;
   const matchSet = new Set(match), relSet = new Set(related);
   return (
-    <div>
+    <div className={wide ? "w-full" : undefined}>
       <span className="inline-flex flex-wrap gap-1">
         {classes.map((n) => {
           const active = open === n;
@@ -33,7 +33,7 @@ export default function ClassChips({ classes, pys, match = [], related = [] }: {
         })}
       </span>
       {open != null && (
-        <div className="mt-1.5 max-w-xs rounded-md border border-[var(--bd)] bg-[var(--bd)]/20 px-2 py-1.5 text-[11px] leading-snug text-[var(--mut)]">
+        <div className={`mt-1.5 rounded-md border border-[var(--bd)] bg-[var(--bd)]/20 px-2 py-1.5 text-[11px] leading-snug text-[var(--mut)] ${wide ? "w-full" : "max-w-xs"}`}>
           <span className="font-semibold text-[var(--tx)]">Clase {open}</span>
           {desc[open] ? <> — {desc[open]}</> : " — sin descripción en el texto de esta marca."}
         </div>
