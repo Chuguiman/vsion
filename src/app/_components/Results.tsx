@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BrainCircuit, Loader2, Check, X, Download, ChevronDown } from "lucide-react";
 import type { ReportDTO, PubDTO, CandDTO, Relation, AiVerdict } from "@/lib/dto";
-import { analyzeBatchAction, setReviewAction, getReviewsAction } from "../actions";
+import { analyzeBatchAction, setReviewAction, setReviewsBulkAction, getReviewsAction } from "../actions";
 import type { ReviewStatus } from "@/lib/reviews";
 import { useRealtimeReviews } from "./useRealtimeReviews";
 import BarcodeStat, { type Seg } from "./BarcodeStat";
@@ -190,7 +190,8 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("pending");
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [savingCount, setSavingCount] = useState(0);
-  const [exporting, setExporting] = useState<"pdf" | "pdf_full" | "xlsx" | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [exporting, setExporting] = useState<"pdf" | "pdf_full" | "xlsx" | "firm" | "own" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const savingReviews = useRef(new Set<string>());
   const router = useRouter();
@@ -286,9 +287,38 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
 
   const matchingGroups = groups.map((g) => ({ ...g, candidates: g.candidates.filter((c) => matchesFilter(c, filter)) }));
   const reviewCounts = { pending: 0, approved: 0, discarded: 0, all: 0 };
+  const pendingInView: string[] = []; // claves pendientes de la vista actual (para acción masiva)
   for (const g of matchingGroups) for (const c of g.candidates) {
-    reviewCounts[reviews[candKeyOf(g, c)] ?? "pending"]++;
+    const st = (reviews[candKeyOf(g, c)] as ReviewStatus | undefined) ?? "pending";
+    reviewCounts[st]++;
     reviewCounts.all++;
+    if (st === "pending") pendingInView.push(candKeyOf(g, c));
+  }
+
+  async function discardAllPending() {
+    if (!runId || bulkBusy) return;
+    const keys = pendingInView.filter((k) => !savingReviews.current.has(k));
+    if (!keys.length) return;
+    if (!confirm(`¿Descartar ${keys.length} ${keys.length === 1 ? "pendiente" : "pendientes"} de esta vista? Podrás devolver alguna a pendiente después.`)) return;
+    setBulkBusy(true);
+    setReviewError(null);
+    const prev = keys.map((k) => ({ k, s: reviews[k], w: reviewers[k] }));
+    for (const k of keys) savingReviews.current.add(k);
+    setSavingCount((n) => n + keys.length);
+    setReviews((p) => { const n = { ...p }; for (const k of keys) n[k] = "discarded"; return n; });
+    if (currentUser) setReviewers((p) => { const n = { ...p }; for (const k of keys) n[k] = currentUser; return n; });
+    try {
+      const r = await setReviewsBulkAction(runId, keys, "discarded");
+      if (!r.ok) throw new Error(r.error || "Error");
+    } catch {
+      setReviews((p) => { const n = { ...p }; for (const { k, s } of prev) { if (s === undefined) delete n[k]; else n[k] = s; } return n; });
+      setReviewers((p) => { const n = { ...p }; for (const { k, w } of prev) { if (w === undefined) delete n[k]; else n[k] = w; } return n; });
+      setReviewError("No se pudieron descartar las pendientes. Se restauró el estado anterior; vuelve a intentarlo.");
+    } finally {
+      for (const k of keys) savingReviews.current.delete(k);
+      setSavingCount((n) => n - keys.length);
+      setBulkBusy(false);
+    }
   }
   const visible = matchingGroups.map((g) => ({
     ...g,
@@ -299,12 +329,29 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
 
   // Conjunto aprobado (independiente del filtro actual) → base del export
   const approvedGroups = groups
-    .map((g) => ({ ...g, candidates: g.candidates.filter((c) => reviews[candKeyOf(g, c)] === "approved") }))
+    .map((g) => ({ ...g, candidates: g.candidates.filter((c) => c.relation === "conflict" && reviews[candKeyOf(g, c)] === "approved") }))
     .filter((g) => g.candidates.length > 0);
   const approvedCount = approvedGroups.reduce((a, g) => a + g.candidates.length, 0);
+  const section = filter === "firm" || filter === "own" ? filter : null;
+
+  async function exportSection() {
+    if (!section || !visible.length || savingReviews.current.size || exporting) return;
+    setExporting(section);
+    setExportError(null);
+    try {
+      const { createSectionPdf, downloadExport } = await import("@/lib/review-export");
+      const blob = await createSectionPdf(visible, meta, section);
+      const gazette = `${meta.country}${meta.number}`.replace(/[^a-zA-Z0-9_-]/g, "_");
+      downloadExport(blob, `vsion-${gazette}-${section === "firm" ? "tu-firma-conflictos-internos" : "aviso-publicacion"}.pdf`);
+    } catch {
+      setExportError("No se pudo generar el archivo. Vuelve a intentarlo.");
+    } finally {
+      setExporting(null);
+    }
+  }
 
   async function exportApproved(format: "pdf" | "pdf_full" | "xlsx") {
-    if (!approvedGroups.length || savingReviews.current.size || exporting) return;
+    if (section || !approvedGroups.length || savingReviews.current.size || exporting) return;
     setExporting(format);
     setExportError(null);
     try {
@@ -385,9 +432,27 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
           </div>
         )}
 
-        {reviewable && approvedCount > 0 && (
+        {reviewable && pendingInView.length > 0 && (
+          <button onClick={discardAllPending} disabled={bulkBusy || savingCount > 0}
+            title="Descarta de un golpe todas las pendientes de la vista actual"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40">
+            {bulkBusy ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />} Descartar pendientes ({pendingInView.length})
+          </button>
+        )}
+
+        {section && (
+          <div className="ml-auto flex flex-col items-end gap-1">
+            <button onClick={exportSection} disabled={!visible.length || savingCount > 0 || exporting !== null}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--bd)] px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40">
+              {exporting === section ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+              {section === "firm" ? "PDF Tu firma" : "PDF Aviso de publicación"}
+            </button>
+            <span className="text-xs text-[var(--mut)]">{section === "firm" ? "Coincidencias internas de la vista actual" : "Solo marcas publicadas de la vista actual, sin duplicados"}</span>
+          </div>
+        )}
+        {!section && reviewable && approvedCount > 0 && (
           <div className="ml-auto">
-            <Menu label={`Exportar (${approvedCount})`} busy={exporting !== null} disabled={savingCount > 0 || exporting !== null}
+            <Menu label={`Exportar aprobadas (${approvedCount})`} busy={exporting !== null} disabled={savingCount > 0 || exporting !== null}
               items={[
                 { label: "PDF simple", onClick: () => exportApproved("pdf") },
                 { label: "PDF completo (fichas)", onClick: () => exportApproved("pdf_full") },

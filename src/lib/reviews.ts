@@ -53,3 +53,26 @@ export async function setReview(
       DO UPDATE SET status = ${status}, reviewed_by = ${by}, reviewer_name = ${byName}, updated_at = now()
   `;
 }
+
+/** Fija un mismo estado a MUCHOS candidatos en una sola escritura (acción masiva). */
+export async function setReviewsBulk(
+  runId: number,
+  candKeys: string[],
+  status: ReviewStatus,
+  reviewer?: Reviewer,
+): Promise<void> {
+  const db = getDb();
+  if (!db) throw new Error("Sin base de datos.");
+  if (!candKeys.length) return;
+  const by = reviewer?.id ?? null;
+  const byName = reviewer?.name ?? null;
+  const rows = candKeys.map((k) => ({
+    run_id: runId, cand_key: k, status, reviewed_by: by, reviewer_name: byName,
+  }));
+  await db`
+    INSERT INTO reviews ${db(rows, "run_id", "cand_key", "status", "reviewed_by", "reviewer_name")}
+    ON CONFLICT (run_id, cand_key) DO UPDATE SET
+      status = excluded.status, reviewed_by = excluded.reviewed_by,
+      reviewer_name = excluded.reviewer_name, updated_at = now()
+  `;
+}

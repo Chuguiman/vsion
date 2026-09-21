@@ -7,7 +7,7 @@ import { getDb } from "@/lib/db";
 import { savePublications } from "@/lib/publications";
 import { importCartera, loadMarksFromDb, getCarteraInfo } from "@/lib/cartera";
 import { analyzeRunBatch, type BatchResult } from "@/lib/ai-web";
-import { setReview, getReviews, type ReviewStatus, type RunReviews } from "@/lib/reviews";
+import { setReview, setReviewsBulk, getReviews, type ReviewStatus, type RunReviews } from "@/lib/reviews";
 import { getSession } from "@/lib/auth";
 import { mintSupabaseToken, realtimeTokenTtl } from "@/lib/supabase-token";
 import type { ClientMark } from "@/types";
@@ -165,6 +165,18 @@ export async function setReviewAction(runId: number, candKey: string, status: Re
     const s = await getSession();
     if (!s) return { ok: false, error: "No autenticado." };
     await setReview(runId, candKey, status, { id: s.userId, name: s.name || s.email });
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error" };
+  }
+}
+
+/** Acción masiva: fija un mismo estado a varios candidatos (p.ej. descartar todas las pendientes). */
+export async function setReviewsBulkAction(runId: number, candKeys: string[], status: ReviewStatus): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const s = await getSession();
+    if (!s) return { ok: false, error: "No autenticado." };
+    await setReviewsBulk(runId, candKeys, status, { id: s.userId, name: s.name || s.email });
     return { ok: true };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error" };
