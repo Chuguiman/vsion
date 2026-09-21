@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Check, X } from "lucide-react";
 import type { CandDTO, PubDTO, Relation, AiVerdict } from "@/lib/dto";
 import type { ReviewStatus } from "@/lib/reviews";
+import ClassChips from "./ClassChips";
 
 const REL_LABEL: Record<Relation, string> = { conflict: "Conflicto", firm: "Tu firma", own: "Tu marca" };
 const REL_CLASS: Record<Relation, string> = {
@@ -72,12 +73,12 @@ export default function CandCard({ c, candKey, status, reviewer, reviewable, onR
           </div>
         </div>
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-2 flex flex-wrap items-start gap-2">
           {kind === "ai" && c.ai
             ? <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${AI_CLASS[c.ai.recommendation]}`}>{AI_LABEL[c.ai.recommendation]} · {c.ai.prob}%</span>
             : <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${REL_CLASS[c.relation]}`}>{REL_LABEL[c.relation]}</span>}
           {c.clientClasses.length > 0 && (
-            <span className="font-mono text-[11px] text-[var(--mut)]">cl. {c.clientClasses.join(", ")}</span>
+            <ClassChips classes={c.clientClasses} pys={c.clientPys} match={c.matchingClasses} related={c.relatedClasses} />
           )}
         </div>
         {c.clientPys && <p className="mt-2 text-xs text-[var(--mut)]"><span className="text-[var(--tx)]">P/S:</span> {c.clientPys}</p>}

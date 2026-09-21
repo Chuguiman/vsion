@@ -9,6 +9,7 @@ import type { ReviewStatus } from "@/lib/reviews";
 import { useRealtimeReviews } from "./useRealtimeReviews";
 import BarcodeStat, { type Seg } from "./BarcodeStat";
 import CandCard from "./CandCard";
+import ClassChips from "./ClassChips";
 import ZoomImage from "./ZoomImage";
 
 const C = { red: "#ef4444", amber: "#f59e0b", blue: "#3b82f6", violet: "#8b5cf6", muted: "#71717a", green: "#10b981" };
@@ -47,21 +48,6 @@ function scoreColor(s: number): string {
 
 function candKeyOf(pub: PubDTO, c: CandDTO): string {
   return `${pub.applicationNumber || pub.denom}::${c.clientCode}::${c.clientDenom}`;
-}
-
-function ClassBadges({ clientClasses, match, related }: { clientClasses: number[]; match: number[]; related: number[] }) {
-  if (!clientClasses.length) return <span className="text-[var(--mut)]">—</span>;
-  const matchSet = new Set(match), relSet = new Set(related);
-  return (
-    <span className="inline-flex flex-wrap gap-1">
-      {clientClasses.map((n) => {
-        const cls = matchSet.has(n) ? "border-[var(--acc)] bg-emerald-500/15 text-[var(--acc)]"
-          : relSet.has(n) ? "border-amber-500 bg-amber-500/10 text-amber-400"
-          : "border-[var(--bd)] text-[var(--mut)]";
-        return <span key={n} className={`rounded border px-1.5 font-mono text-[11px] ${cls}`}>{n}</span>;
-      })}
-    </span>
-  );
 }
 
 function RelationCell({ c }: { c: CandDTO }) {
@@ -117,7 +103,7 @@ function Row({ c, pub, reviewable, status, reviewer, onReview }: {
         {c.clientHolder && <div className="text-xs text-blue-300">Titular: {c.clientHolder}</div>}
         {c.clientPys && <div className="mt-1 max-w-xs text-xs text-[var(--mut)]" title={c.clientPys}>P/S: {c.clientPys}</div>}
       </td>
-      <td className="px-4 py-2.5"><ClassBadges clientClasses={c.clientClasses} match={c.matchingClasses} related={c.relatedClasses} /></td>
+      <td className="px-4 py-2.5 align-top"><ClassChips classes={c.clientClasses} pys={c.clientPys} match={c.matchingClasses} related={c.relatedClasses} /></td>
       <td className="px-4 py-2.5"><RelationCell c={c} /></td>
       {reviewable && (
         <td className="px-4 py-2.5">
@@ -150,10 +136,15 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGro
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--mut)]">
             <span className="font-mono">{g.applicationNumber}</span>
             <span>{g.markType}</span>
-            <span>Clases: {g.classes.join(", ") || "—"}</span>
             <span>Solicitante: {g.applicant || "—"}</span>
             {g.representant && <span>Apoderado: <span className="font-medium text-teal-300">{g.representant}</span></span>}
           </div>
+          {g.classes.length > 0 && (
+            <div className="mt-1 flex flex-wrap items-start gap-x-2 gap-y-1 text-xs text-[var(--mut)]">
+              <span className="pt-0.5">Clases:</span>
+              <ClassChips classes={g.classes} pys={g.pys} />
+            </div>
+          )}
           {g.pys && (
             <p className="mt-1.5 text-xs text-[var(--mut)]" title={g.pys}>
               <span className="font-medium text-[var(--tx)]">Productos/servicios: </span>{g.pys}
