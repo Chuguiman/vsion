@@ -115,6 +115,7 @@ function Row({ c, pub, reviewable, status, reviewer, onReview }: {
         <div className={`font-semibold ${dim ? "line-through" : ""}`}>{c.clientDenom}</div>
         <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
         {c.clientHolder && <div className="text-xs text-blue-300">Titular: {c.clientHolder}</div>}
+        {c.clientPys && <div className="mt-1 max-w-xs text-xs text-[var(--mut)]" title={c.clientPys}>P/S: {c.clientPys}</div>}
       </td>
       <td className="px-4 py-2.5"><ClassBadges clientClasses={c.clientClasses} match={c.matchingClasses} related={c.relatedClasses} /></td>
       <td className="px-4 py-2.5"><RelationCell c={c} /></td>
@@ -150,6 +151,11 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, imageUrl }: 
             <span>Solicitante: {g.applicant || "—"}</span>
             {g.representant && <span>Apoderado: <span className="font-medium text-teal-300">{g.representant}</span></span>}
           </div>
+          {g.pys && (
+            <p className="mt-1.5 text-xs text-[var(--mut)]" title={g.pys}>
+              <span className="font-medium text-[var(--tx)]">Productos/servicios: </span>{g.pys}
+            </p>
+          )}
         </div>
       </header>
       {/* Desktop: tabla densa */}
@@ -334,15 +340,16 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
   const approvedCount = approvedGroups.reduce((a, g) => a + g.candidates.length, 0);
   const section = filter === "firm" || filter === "own" ? filter : null;
 
-  async function exportSection() {
+  async function exportSection(format: "pdf" | "xlsx" = "pdf") {
     if (!section || !visible.length || savingReviews.current.size || exporting) return;
     setExporting(section);
     setExportError(null);
     try {
-      const { createSectionPdf, downloadExport } = await import("@/lib/review-export");
-      const blob = await createSectionPdf(visible, meta, section);
+      const { createSectionPdf, createSectionExcel, downloadExport } = await import("@/lib/review-export");
+      const blob = await (format === "xlsx" ? createSectionExcel : createSectionPdf)(visible, meta, section);
       const gazette = `${meta.country}${meta.number}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-      downloadExport(blob, `vsion-${gazette}-${section === "firm" ? "tu-firma-conflictos-internos" : "aviso-publicacion"}.pdf`);
+      const base = section === "firm" ? "tu-firma-conflictos-internos" : "aviso-publicacion";
+      downloadExport(blob, `vsion-${gazette}-${base}.${format}`);
     } catch {
       setExportError("No se pudo generar el archivo. Vuelve a intentarlo.");
     } finally {
@@ -442,11 +449,12 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
 
         {section && (
           <div className="ml-auto flex flex-col items-end gap-1">
-            <button onClick={exportSection} disabled={!visible.length || savingCount > 0 || exporting !== null}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--bd)] px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-40">
-              {exporting === section ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-              {section === "firm" ? "PDF Tu firma" : "PDF Aviso de publicación"}
-            </button>
+            <Menu label={section === "firm" ? "Exportar Tu firma" : "Exportar Aviso de publicación"}
+              busy={exporting !== null} disabled={!visible.length || savingCount > 0 || exporting !== null}
+              items={[
+                { label: "PDF", onClick: () => exportSection("pdf") },
+                { label: "Excel", onClick: () => exportSection("xlsx") },
+              ]} />
             <span className="text-xs text-[var(--mut)]">{section === "firm" ? "Coincidencias internas de la vista actual" : "Solo marcas publicadas de la vista actual, sin duplicados"}</span>
           </div>
         )}

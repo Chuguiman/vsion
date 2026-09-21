@@ -80,6 +80,7 @@ export default function CandCard({ c, candKey, status, reviewer, reviewable, onR
             <span className="font-mono text-[11px] text-[var(--mut)]">cl. {c.clientClasses.join(", ")}</span>
           )}
         </div>
+        {c.clientPys && <p className="mt-2 text-xs text-[var(--mut)]"><span className="text-[var(--tx)]">P/S:</span> {c.clientPys}</p>}
         {c.ai?.summary && <p className="mt-2 text-xs text-[var(--mut)]">{c.ai.summary}</p>}
 
         {reviewable && (

@@ -50,6 +50,59 @@ export async function createSectionPdf(groups: PubDTO[], meta: ReportDTO["meta"]
   return doc.output("blob");
 }
 
+/** Filas para el Excel de sección (firm = pares publicación×portafolio; own = publicaciones únicas). */
+export function sectionExportRows(groups: PubDTO[], section: "firm" | "own") {
+  const selected = reportGroups(groups, section);
+  if (section === "firm") {
+    return selected.flatMap((g) => g.candidates.map((c) => ({
+      "Marca publicada": g.denom,
+      "Expediente publicación": g.applicationNumber,
+      "Solicitante": g.applicant,
+      "Apoderado publicación": g.representant,
+      "Clases publicación": g.classes.join(", "),
+      "Productos/servicios publicación": g.pys,
+      "Marca del portafolio": c.clientDenom,
+      "Código": c.clientCode,
+      "Titular": c.clientHolder,
+      "Apoderado portafolio": c.clientAttorney,
+      "Clases portafolio": c.clientClasses.join(", "),
+      "Productos/servicios portafolio": c.clientPys,
+      "Similitud": c.score,
+    })));
+  }
+  const pubs = [...new Map(selected.map((g) => [g.applicationNumber || g.denom, g])).values()];
+  return pubs.map((g) => ({
+    "Marca publicada": g.denom,
+    "Expediente": g.applicationNumber,
+    "Titular / solicitante": g.applicant,
+    "Apoderado": g.representant,
+    "Tipo de marca": g.markType,
+    "Clases Niza": g.classes.join(", "),
+    "Productos/servicios": g.pys,
+  }));
+}
+
+export async function createSectionExcel(groups: PubDTO[], meta: ReportDTO["meta"], section: "firm" | "own") {
+  const rows = sectionExportRows(groups, section);
+  if (!rows.length) throw new Error("No hay registros para este reporte.");
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  // Anchos: descripciones anchas, resto según el largo del encabezado.
+  sheet["!cols"] = Object.keys(rows[0]).map((k) => ({ wch: /Productos\/servicios/.test(k) ? 60 : Math.min(34, Math.max(14, k.length + 4)) }));
+  if (sheet["!ref"]) sheet["!autofilter"] = { ref: sheet["!ref"] };
+  const name = section === "firm" ? "Tu firma" : "Aviso publicación";
+  XLSX.utils.book_append_sheet(workbook, sheet, name);
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+    ["Gaceta", `${meta.country}${meta.number}`],
+    ["Publicación", meta.datePublic], ["Oposición hasta", meta.dateDue],
+    ["Reporte", name], ["Registros", rows.length],
+  ]), "Gaceta");
+  return new Blob([XLSX.write(workbook, { type: "array", bookType: "xlsx" })], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+}
+
 export function approvedExportRows(groups: PubDTO[]) {
   return reportGroups(groups, "conflict").flatMap((g) => g.candidates.map((c) => ({
     "Publicación": g.denom,
