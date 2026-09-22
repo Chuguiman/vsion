@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, Loader2, ImageOff } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { listCarteraMarksAction } from "../actions";
 import type { CarteraMarksPage } from "@/lib/cartera";
 import ZoomImage from "./ZoomImage";
@@ -55,15 +55,18 @@ export default function CarteraViewer({ orgs = [], isSuper = false }: {
           <input defaultValue={q} onChange={(e) => onSearch(e.target.value)} placeholder="Buscar por marca, código, expediente o titular"
             className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--acc)]" />
         </div>
-        <label className="inline-flex items-center gap-2 text-sm text-[var(--mut)]">
-          <input type="checkbox" checked={onlyImages} onChange={(e) => { setPage(1); setOnlyImages(e.target.checked); }} />
-          Solo con imagen
-        </label>
+        {(data?.withImages ?? 0) > 0 && (
+          <label className="inline-flex items-center gap-2 text-sm text-[var(--mut)]">
+            <input type="checkbox" checked={onlyImages} onChange={(e) => { setPage(1); setOnlyImages(e.target.checked); }} />
+            Solo con imagen
+          </label>
+        )}
       </div>
 
       {data && (
         <p className="mb-3 text-xs text-[var(--mut)]">
-          {data.total.toLocaleString()} marcas{q ? " (filtradas)" : ""} · {data.withImages.toLocaleString()} con imagen en cartera
+          {data.total.toLocaleString()} marcas{q ? " (filtradas)" : ""}
+          {data.withImages > 0 ? ` · ${data.withImages.toLocaleString()} con imagen en cartera` : ""}
         </p>
       )}
 
@@ -78,11 +81,9 @@ export default function CarteraViewer({ orgs = [], isSuper = false }: {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {data?.rows.map((m) => (
               <div key={m.id} className="flex gap-3 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-3">
-                <span className="shrink-0">
-                  {m.imageUrl
-                    ? <ZoomImage src={m.imageUrl} alt={m.denom} size={56} />
-                    : <span className="flex h-14 w-14 items-center justify-center rounded border border-dashed border-[var(--bd)] text-[var(--mut)]"><ImageOff size={18} /></span>}
-                </span>
+                {m.imageUrl && (
+                  <span className="shrink-0"><ZoomImage src={m.imageUrl} alt={m.denom} size={56} /></span>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className={`truncate font-semibold ${m.denom ? "" : "italic text-[var(--mut)]"}`}>{m.denom || `(${m.markType || "figurativa"})`}</div>
                   <div className="font-mono text-[11px] text-[var(--mut)]">
