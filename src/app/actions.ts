@@ -1,16 +1,33 @@
 "use server";
 
-import { parseClientMarks, parseGazette, parseAllPublications } from "@/load";
+import { parseClientMarks, parseClientMarksFromGazette, parseGazette, parseAllPublications } from "@/load";
 import { sweep } from "@/sweep";
 import { toReportDTO, type ReportDTO } from "@/lib/dto";
 import { getDb } from "@/lib/db";
-import { savePublications } from "@/lib/publications";
+import { savePublications, loadGazetteEntries } from "@/lib/publications";
+import { upsertGazette, gazetteHasPublications, getGazetteMeta, listReusableGazettes, type ReusableGazette } from "@/lib/gazettes";
 import { importCartera, loadMarksFromDb, getCarteraInfo } from "@/lib/cartera";
 import { analyzeRunBatch, type BatchResult } from "@/lib/ai-web";
 import { setReview, setReviewsBulk, getReviews, type ReviewStatus, type RunReviews } from "@/lib/reviews";
 import { getSession } from "@/lib/auth";
 import { mintSupabaseToken, realtimeTokenTtl } from "@/lib/supabase-token";
-import type { ClientMark } from "@/types";
+import type { ClientMark, GazetteMeta, GazetteEntry } from "@/types";
+
+/** Inserta la fila de la corrida (barrido contra la cartera de una org). */
+async function insertRunRow(
+  db: NonNullable<ReturnType<typeof getDb>>, meta: GazetteMeta, dto: ReportDTO,
+  clientCount: number, gazetteCount: number, orgId: number | null, gazetteId: number | null
+): Promise<number> {
+  const [row] = await db<{ id: number }[]>`
+    INSERT INTO runs (
+      country, gazette_number, date_public, date_due, language,
+      client_count, gazette_count, n_candidates, n_own, ai_ran, payload, organization_id, gazette_id
+    ) VALUES (
+      ${meta.country}, ${meta.number}, ${meta.datePublic || null}, ${meta.dateDue || null}, ${meta.language},
+      ${clientCount}, ${gazetteCount}, ${dto.stats.candidates}, ${dto.stats.own}, false, ${db.json(dto as any)}, ${orgId}, ${gazetteId}
+    ) RETURNING id`;
+  return row.id;
+}
 
 export interface RunResult {
   ok: boolean;
@@ -30,19 +47,15 @@ async function sweepAndSave(marks: ClientMark[], parsed: ReturnType<typeof parse
   const db = getDb();
   if (db) {
     try {
-      const [row] = await db<{ id: number }[]>`
-        INSERT INTO runs (
-          country, gazette_number, date_public, date_due, language,
-          client_count, gazette_count, n_candidates, n_own, ai_ran, payload, organization_id
-        ) VALUES (
-          ${meta.country}, ${meta.number}, ${meta.datePublic || null}, ${meta.dateDue || null}, ${meta.language},
-          ${marks.length}, ${entries.length}, ${dto.stats.candidates}, ${dto.stats.own}, false, ${db.json(dto as any)}, ${orgId}
-        ) RETURNING id
-      `;
-      runId = row.id;
-      // Guarda la publicación completa (todas las entradas) para el visor paginado.
+      // Gaceta compartida: se crea/actualiza una vez por país+número y se reutiliza.
+      const gazetteId = await upsertGazette(meta);
+      runId = await insertRunRow(db, meta, dto, marks.length, entries.length, orgId, gazetteId);
+      // Publicaciones + imágenes: se guardan una sola vez por gaceta; si ya existen
+      // (otra org las cargó antes), se reutilizan sin re-insertar.
       try {
-        await savePublications(runId, parseAllPublications(gazetteDoc));
+        if (gazetteId != null && !(await gazetteHasPublications(gazetteId))) {
+          await savePublications(gazetteId, parseAllPublications(gazetteDoc));
+        }
       } catch (e) {
         console.error("[vsion] no se pudieron guardar las publicaciones:", e);
       }
@@ -114,33 +127,110 @@ export async function runComparisonFromDb(gazetteText: string, organizationId: n
   return sweepAndSave(marks, parsed, gazetteDoc, orgId, t0);
 }
 
-/** Importa/reemplaza la cartera del cliente en la BD. */
-export async function importCarteraAction(clientText: string): Promise<{ ok: boolean; count?: number; error?: string }> {
+/** Gacetas ya cargadas que la org puede comparar sin re-subir (país habilitado,
+ *  con publicaciones y aún no comparadas por esa org). */
+export async function listReusableGazettesAction(organizationId: number | null = null): Promise<{ ok: boolean; gazettes?: ReusableGazette[]; error?: string }> {
+  const s = await getSession();
+  if (!s) return { ok: false, error: "No autenticado." };
+  const orgId = s.role === "superadmin" ? organizationId : s.organizationId;
+  if (orgId == null) return { ok: true, gazettes: [] };
+  try {
+    return { ok: true, gazettes: await listReusableGazettes(orgId) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error." };
+  }
+}
+
+/** Compara una gaceta YA cargada contra la cartera de la org, sin re-subir el
+ *  archivo: reconstruye las entradas desde las publicaciones guardadas. */
+export async function runComparisonFromGazetteAction(gazetteId: number, organizationId: number | null = null): Promise<RunResult> {
+  const denied = await requireUploader(); if (denied) return denied;
+  const org = await resolveRunOrg(organizationId);
+  if (org && typeof org === "object") return org;
+  const orgId = org as number | null;
+  const t0 = Date.now();
+  const db = getDb();
+  if (!db) return { ok: false, error: "Sin base de datos." };
+
+  const meta = await getGazetteMeta(gazetteId);
+  if (!meta) return { ok: false, error: "Gaceta no encontrada." };
+  // Evita duplicar: si esta org ya comparó esta gaceta, no repite.
+  const [dup] = await db<{ id: number }[]>`SELECT id FROM runs WHERE organization_id ${orgId == null ? db`IS NULL` : db`= ${orgId}`} AND gazette_id = ${gazetteId} LIMIT 1`;
+  if (dup) return { ok: false, error: "Esta organización ya comparó esta gaceta.", runId: dup.id };
+
+  const entries: GazetteEntry[] = await loadGazetteEntries(gazetteId);
+  if (!entries.length) return { ok: false, error: "La gaceta no tiene publicaciones guardadas para comparar." };
+
+  const marks = await loadMarksFromDb({ orgId, country: meta.country });
+  if (!marks.length) {
+    return { ok: false, error: "No hay marcas de cartera para vigilar en este país. Revisa el perfil de vigilancia en Países, o importa la cartera." };
+  }
+
+  const { candidates } = sweep(entries, marks);
+  const dto = toReportDTO(candidates, meta, { clientCount: marks.length, gazetteCount: entries.length, skipped: 0 });
+  let runId: number | null = null;
+  try {
+    runId = await insertRunRow(db, meta, dto, marks.length, entries.length, orgId, gazetteId);
+  } catch (e) {
+    console.error("[vsion] no se pudo guardar la corrida (reutilización):", e);
+  }
+  return { ok: true, dto, runId, elapsedMs: Date.now() - t0 };
+}
+
+/** Importa/reemplaza la cartera de una organización. Acepta casos.json (arreglo)
+ *  o el formato gaceta ({ details: [...] }, p.ej. ccb.json). */
+export async function importCarteraAction(clientText: string, organizationId: number | null = null): Promise<{ ok: boolean; count?: number; error?: string }> {
   const s = await getSession();
   if (s?.role !== "superadmin") return { ok: false, error: "No autorizado." };
-  let rows: any;
+  if (organizationId == null) return { ok: false, error: "Elige una organización." };
+  const db = getDb();
+  if (db) {
+    const [o] = await db<{ id: number }[]>`SELECT id FROM organizations WHERE id = ${organizationId}`;
+    if (!o) return { ok: false, error: "Organización no válida." };
+  }
+  let doc: any;
   try {
-    rows = JSON.parse(clientText);
+    doc = JSON.parse(clientText);
   } catch {
     return { ok: false, error: "El archivo no es JSON válido." };
   }
-  if (!Array.isArray(rows)) return { ok: false, error: "La cartera debe ser un arreglo JSON (casos.json)." };
+  let marks: ClientMark[];
+  if (Array.isArray(doc)) marks = parseClientMarks(doc);                       // casos.json
+  else if (doc && Array.isArray(doc.details)) marks = parseClientMarksFromGazette(doc); // formato gaceta (ccb.json)
+  else return { ok: false, error: "Formato no reconocido: se espera casos.json (arreglo) o un JSON con 'details'." };
+  if (!marks.length) return { ok: false, error: "No se encontraron marcas con denominación en el archivo." };
   try {
-    const count = await importCartera(rows);
+    const count = await importCartera(marks, organizationId);
     return { ok: true, count };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Error al importar." };
   }
 }
 
-export async function carteraInfoAction() {
-  return getCarteraInfo();
+export async function carteraInfoAction(organizationId: number | null = null) {
+  const s = await getSession();
+  if (!s) return null;
+  // superadmin puede consultar cualquier org; los demás, solo la suya.
+  const orgId = s.role === "superadmin" ? organizationId : s.organizationId;
+  return getCarteraInfo(orgId);
+}
+
+/** Aislamiento por organización: ¿la sesión puede operar sobre este run? */
+async function canAccessRun(runId: number): Promise<boolean> {
+  const s = await getSession();
+  if (!s) return false;
+  if (s.role === "superadmin") return true;
+  const db = getDb();
+  if (!db) return false;
+  const [r] = await db<{ organization_id: number | null }[]>`SELECT organization_id FROM runs WHERE id = ${runId}`;
+  return !!r && r.organization_id === s.organizationId;
 }
 
 /** Fase 2: analiza un lote de conflictos con IA y persiste. El cliente llama en bucle. */
 export async function analyzeBatchAction(runId: number, batchSize = 15): Promise<BatchResult> {
   const s = await getSession();
   if (!s) return { ok: false, error: "No autenticado.", analyzed: 0, total: 0, remaining: 0 };
+  if (!(await canAccessRun(runId))) return { ok: false, error: "No autorizado.", analyzed: 0, total: 0, remaining: 0 };
   return analyzeRunBatch(runId, batchSize);
 }
 
@@ -164,6 +254,7 @@ export async function setReviewAction(runId: number, candKey: string, status: Re
   try {
     const s = await getSession();
     if (!s) return { ok: false, error: "No autenticado." };
+    if (!(await canAccessRun(runId))) return { ok: false, error: "No autorizado." };
     await setReview(runId, candKey, status, { id: s.userId, name: s.name || s.email });
     return { ok: true };
   } catch (e) {
@@ -176,6 +267,7 @@ export async function setReviewsBulkAction(runId: number, candKeys: string[], st
   try {
     const s = await getSession();
     if (!s) return { ok: false, error: "No autenticado." };
+    if (!(await canAccessRun(runId))) return { ok: false, error: "No autorizado." };
     await setReviewsBulk(runId, candKeys, status, { id: s.userId, name: s.name || s.email });
     return { ok: true };
   } catch (e) {
@@ -187,6 +279,7 @@ export async function setReviewsBulkAction(runId: number, candKeys: string[], st
 export async function getReviewsAction(runId: number): Promise<RunReviews> {
   const s = await getSession();
   if (!s) return { statuses: {}, reviewers: {} };
+  if (!(await canAccessRun(runId))) return { statuses: {}, reviewers: {} };
   return getReviews(runId);
 }
 

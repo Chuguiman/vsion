@@ -45,8 +45,25 @@ create table if not exists runs (
 );
 alter table runs add column if not exists organization_id bigint;
 
+alter table runs add column if not exists gazette_id bigint;
+
 create index if not exists runs_created_idx on runs (created_at desc);
 create index if not exists runs_gazette_idx on runs (country, gazette_number);
+
+-- Gaceta como entidad compartida: se guarda UNA vez por (país, número) y la
+-- reutilizan todas las organizaciones. Las publicaciones y sus imágenes cuelgan
+-- de aquí; cada 'run' (barrido contra la cartera de una org) referencia su gazette_id.
+create table if not exists gazettes (
+  id           bigint generated always as identity primary key,
+  country      text not null,
+  number       text not null,
+  date_public  date,
+  date_due     date,
+  language     text default 'es',
+  count        int  not null default 0,
+  created_at   timestamptz not null default now(),
+  unique (country, number)
+);
 
 -- Países (maestro). Ids alineados con samai para match futuro (no autogenerado).
 create table if not exists countries (
@@ -81,6 +98,7 @@ create table if not exists client_marks (
   filed_date text,
   valid_until text,
   register_date text,
+  organization_id bigint,                        -- org dueña (null = legado global)
   created_at timestamptz not null default now()
 );
 -- columnas añadidas después de la creación inicial (idempotente)
@@ -88,7 +106,10 @@ alter table client_marks add column if not exists country text;
 alter table client_marks add column if not exists filed_date text;
 alter table client_marks add column if not exists valid_until text;
 alter table client_marks add column if not exists register_date text;
+-- Multi-organización: cada marca de cartera pertenece a una org (null = legado global).
+alter table client_marks add column if not exists organization_id bigint;
 create index if not exists client_marks_denom_idx on client_marks (denom);
+create index if not exists client_marks_org_idx on client_marks (organization_id);
 
 -- Perfil de vigilancia por (organización, país de gaceta). Define qué
 -- subconjunto de la cartera se compara en ese país. Sin fila => cartera completa.
@@ -115,7 +136,8 @@ create index if not exists watch_marks_scope_idx on watch_marks (organization_id
 -- Alimenta el visor paginado y, en Fase B, las imágenes + hash perceptual.
 create table if not exists publications (
   id                 bigint generated always as identity primary key,
-  run_id             bigint not null,
+  gazette_id         bigint,                       -- gaceta dueña (modelo normalizado)
+  run_id             bigint,                       -- legado (pre-normalización)
   seq                int    not null default 0,   -- orden dentro de la gaceta
   denom              text   not null default '',  -- vacío = figurativa/3D
   mark_category      text,                        -- Marca / Lema / Enseña / …
@@ -133,7 +155,12 @@ create table if not exists publications (
   image_phash        text,   -- Fase B: hash perceptual
   created_at         timestamptz not null default now()
 );
+-- Migración al modelo normalizado (idempotente): las publicaciones cuelgan de la
+-- gaceta, no del run; run_id pasa a ser opcional (legado).
+alter table publications add column if not exists gazette_id bigint;
+alter table publications alter column run_id drop not null;
 create index if not exists publications_run_idx on publications (run_id, seq);
+create index if not exists publications_gazette_idx on publications (gazette_id, seq);
 
 -- Imágenes de publicaciones (Fase B). Clave = id de imagen del SIC (== nombre de
 -- archivo). Se llena con scripts/ingest-images.mjs; el visor la une por image_id.
@@ -184,6 +211,7 @@ create policy reviews_select_authenticated on reviews for select to authenticate
 alter table organizations      enable row level security;
 alter table users              enable row level security;
 alter table runs               enable row level security;
+alter table gazettes           enable row level security;
 alter table countries          enable row level security;
 alter table monitored_countries enable row level security;
 alter table client_marks       enable row level security;

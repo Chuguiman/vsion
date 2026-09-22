@@ -82,23 +82,25 @@ export async function listWatchMarks(orgId: number | null, country: string): Pro
     ORDER BY cm.denom LIMIT 500`;
 }
 
-/** Titulares distintos de la cartera (para el selector), con conteo. */
-export async function listHolders(limit = 300): Promise<{ holder: string; n: number }[]> {
+/** Titulares distintos de la cartera de la org (para el selector), con conteo. */
+export async function listHolders(orgId: number | null, limit = 300): Promise<{ holder: string; n: number }[]> {
   const db = getDb();
   if (!db) return [];
+  const org = orgId == null ? db`organization_id IS NULL` : db`organization_id = ${orgId}`;
   return db<{ holder: string; n: number }[]>`
     SELECT holder, count(*)::int AS n FROM client_marks
-    WHERE holder IS NOT NULL AND holder <> ''
+    WHERE holder IS NOT NULL AND holder <> '' AND ${org}
     GROUP BY holder ORDER BY n DESC, holder LIMIT ${limit}`;
 }
 
-/** Búsqueda de marcas en la cartera por denominación o código/expediente. */
-export async function searchMarks(q: string, limit = 20): Promise<MarkLite[]> {
+/** Búsqueda de marcas en la cartera de la org por denominación o código/expediente. */
+export async function searchMarks(orgId: number | null, q: string, limit = 20): Promise<MarkLite[]> {
   const db = getDb();
   if (!db || !q.trim()) return [];
   const like = `%${q.trim()}%`;
+  const org = orgId == null ? db`organization_id IS NULL` : db`organization_id = ${orgId}`;
   return db<MarkLite[]>`
     SELECT id, denom, code, holder FROM client_marks
-    WHERE denom ILIKE ${like} OR code ILIKE ${like} OR case_id ILIKE ${like}
+    WHERE (denom ILIKE ${like} OR code ILIKE ${like} OR case_id ILIKE ${like}) AND ${org}
     ORDER BY denom LIMIT ${limit}`;
 }

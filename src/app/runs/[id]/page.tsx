@@ -14,20 +14,25 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   const db = getDb();
   if (!db) return notFound();
 
-  const [row] = await db<{ payload: ReportDTO }[]>`
-    SELECT payload FROM runs WHERE id = ${Number(id)}
+  const [row] = await db<{ payload: ReportDTO; organization_id: number | null }[]>`
+    SELECT payload, organization_id FROM runs WHERE id = ${Number(id)}
   `;
   if (!row) return notFound();
   const session = await getSession();
   if (!session) return notFound();
+  // Aislamiento: solo el superadmin (o la propia organización) puede ver la corrida.
+  if (session.role !== "superadmin" && row.organization_id !== session.organizationId) return notFound();
   const { statuses, reviewers } = await getReviews(Number(id));
   const canEdit = true; // workspace compartido: cualquier usuario puede revisar/exportar
 
   // Imágenes de las publicaciones de esta corrida (id de imagen SIC → URL pública).
   const imgRows = await db<{ image_id: string; bucket: string; path: string }[]>`
     SELECT DISTINCT p.image_id, mi.bucket, mi.path
-    FROM publications p JOIN mark_images mi ON mi.image_id = p.image_id
-    WHERE p.run_id = ${Number(id)} AND p.image_id IS NOT NULL AND p.image_id <> ''`;
+    FROM runs r
+    JOIN publications p ON (r.gazette_id IS NOT NULL AND p.gazette_id = r.gazette_id)
+                        OR (r.gazette_id IS NULL AND p.run_id = r.id)
+    JOIN mark_images mi ON mi.image_id = p.image_id
+    WHERE r.id = ${Number(id)} AND p.image_id IS NOT NULL AND p.image_id <> ''`;
   // El payload puede traer el id con o sin extensión → se normaliza para casar.
   const normId = (s: string) => s.replace(/\.(webp|png|jpe?g)$/i, "");
   const images: Record<string, string> = {};

@@ -1,15 +1,35 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search, Plus, X, SlidersHorizontal, ChevronDown } from "lucide-react";
-import { setMonitoredAction } from "../paises-actions";
+import { useEffect, useMemo, useState } from "react";
+import { Search, Plus, X, SlidersHorizontal, ChevronDown, Loader2 } from "lucide-react";
+import { setMonitoredAction, listCountriesAction } from "../paises-actions";
 import ScopePanel from "./ScopePanel";
 import type { CountryRow } from "@/lib/countries";
 
-export default function PaisesClient({ countries }: { countries: CountryRow[] }) {
+export default function PaisesClient({ countries, orgs = [], isSuper = false }: {
+  countries: CountryRow[];
+  orgs?: { id: number; name: string }[];
+  isSuper?: boolean;
+}) {
   const [rows, setRows] = useState(countries);
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
+  const [orgId, setOrgId] = useState<string>(orgs.length === 1 ? String(orgs[0].id) : "");
+  const [loading, setLoading] = useState(false);
+  // org efectiva que se manda a las acciones (null para no-superadmin → su propia org)
+  const orgArg = isSuper ? (orgId ? Number(orgId) : null) : null;
+
+  useEffect(() => {
+    if (!isSuper) return;
+    setOpenId(null);
+    if (!orgId) { setRows([]); return; }
+    let alive = true;
+    setLoading(true);
+    listCountriesAction(Number(orgId))
+      .then((r) => { if (alive) setRows(r.ok ? (r.countries ?? []) : []); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [orgId, isSuper]);
 
   const active = useMemo(() => rows.filter((c) => c.is_active).sort((a, b) => a.name.localeCompare(b.name)), [rows]);
   const matches = useMemo(() => {
@@ -20,13 +40,33 @@ export default function PaisesClient({ countries }: { countries: CountryRow[] })
 
   async function setActive(c: CountryRow, next: boolean) {
     setRows((prev) => prev.map((r) => (r.id === c.id ? { ...r, is_active: next } : r)));
-    const r = await setMonitoredAction(c.id, next);
+    const r = await setMonitoredAction(c.id, next, orgArg);
     if (!r.ok) setRows((prev) => prev.map((x) => (x.id === c.id ? { ...x, is_active: !next } : x)));
     if (next) setQ("");
   }
 
   return (
     <div className="max-w-3xl">
+      {isSuper && (
+        <div className="mb-6 max-w-md">
+          <label className="mb-1 block text-xs font-medium text-[var(--mut)]">Organización</label>
+          <select value={orgId} onChange={(e) => setOrgId(e.target.value)}
+            className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2 text-sm outline-none focus:border-[var(--acc)]">
+            <option value="">Elige una organización…</option>
+            {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+          {orgs.length === 0 && <p className="mt-1 text-xs text-amber-400">No hay organizaciones. Crea una en Usuarios.</p>}
+        </div>
+      )}
+
+      {isSuper && !orgId ? (
+        <p className="rounded-xl border border-dashed border-[var(--bd)] px-4 py-6 text-center text-sm text-[var(--mut)]">
+          Elige una organización para gestionar sus países de monitoreo.
+        </p>
+      ) : loading ? (
+        <div className="flex items-center gap-2 px-1 py-6 text-sm text-[var(--mut)]"><Loader2 size={15} className="animate-spin" /> Cargando países…</div>
+      ) : (
+      <>
       {/* Agregar país (búsqueda) */}
       <div className="mb-6">
         <label className="mb-1 block text-xs text-[var(--mut)]">Agregar país a monitorear</label>
@@ -81,13 +121,15 @@ export default function PaisesClient({ countries }: { countries: CountryRow[] })
                 </div>
                 {open && (
                   <div className="border-t border-[var(--bd)] bg-[var(--bg)]">
-                    <ScopePanel country={c.iso2} name={c.name} />
+                    <ScopePanel country={c.iso2} name={c.name} orgId={orgArg} />
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+      )}
+      </>
       )}
     </div>
   );

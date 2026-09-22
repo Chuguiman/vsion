@@ -1,11 +1,12 @@
 import CarteraManager from "@/app/_components/CarteraManager";
 import { getCarteraInfo } from "@/lib/cartera";
+import { listOrganizations } from "@/lib/organizations";
 
 export const dynamic = "force-dynamic";
 
 export default async function CarteraPage() {
-  const info = await getCarteraInfo();
-  if (!info) {
+  const probe = await getCarteraInfo(null); // null => sin base de datos
+  if (!probe) {
     return (
       <div>
         <h1 className="mb-4 text-xl font-semibold">Cartera del cliente</h1>
@@ -15,5 +16,6 @@ export default async function CarteraPage() {
       </div>
     );
   }
-  return <CarteraManager info={info} />;
+  const orgs = await listOrganizations();
+  return <CarteraManager orgs={orgs.map((o) => ({ id: o.id, name: o.name }))} />;
 }

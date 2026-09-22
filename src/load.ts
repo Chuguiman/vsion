@@ -46,6 +46,42 @@ export function loadClientMarks(path: string): ClientMark[] {
   return parseClientMarks(JSON.parse(readFileSync(path, "utf8")) as any[]);
 }
 
+/**
+ * Documento en formato gaceta (details[] con word/applicants/pys[]) → cartera del
+ * cliente. Sirve para importar el portafolio de una organización cuando viene
+ * exportado con la misma estructura que una gaceta (p.ej. ccb.json). Descarta
+ * denominaciones vacías (figurativas/3D), que el barrido fonético no usa.
+ */
+export function parseClientMarksFromGazette(doc: any): ClientMark[] {
+  const marks: ClientMark[] = [];
+  for (const d of doc?.details ?? []) {
+    const denom = String(d.word ?? "").trim();
+    if (!denom) continue;
+    const pys = Array.isArray(d.pys)
+      ? d.pys.map((p: any) => `${p.clase ? p.clase + ". " : ""}${p.descripcion ?? ""}`).join(" ").trim()
+      : "";
+    const ap = Array.isArray(d.applicants) && d.applicants[0] ? d.applicants[0] : {};
+    const rep = Array.isArray(d.representants) && d.representants[0] ? d.representants[0] : {};
+    const country = String(d.paisrad ?? ap.aplicantCountry ?? "").trim().toUpperCase();
+    marks.push({
+      id: String(d.applicationNumber ?? "").trim(),
+      code: String(d.official_number ?? "").trim(),
+      denom,
+      classes: parseClasses(d.clases),
+      pys,
+      holder: String(ap.aplicantName ?? "").trim(),
+      attorney: String(rep.representant_name ?? "").trim(),
+      status: String(d.markStatus ?? "").trim(),
+      country,
+      filedDate: String(d.applicationDate ?? "").trim(),
+      validUntil: String(d.vigencia ?? "").trim(),
+      registerDate: "",
+      keys: computeKeys(denom),
+    });
+  }
+  return marks;
+}
+
 /** Documento de gaceta (ya parseado) → { meta, entries }. */
 export function parseGazette(doc: any): { meta: GazetteMeta; entries: GazetteEntry[]; skipped: number } {
   const pub = Array.isArray(doc.publication) ? doc.publication[0] : doc.publication ?? {};

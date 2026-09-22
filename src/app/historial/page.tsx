@@ -39,9 +39,11 @@ export default async function Historial() {
     );
   }
 
-  // Workspace compartido: todos ven las corridas.
+  // Aislamiento por organización: cada org ve solo sus corridas; el superadmin, todas.
   const s = await getSession();
-  const isSuper = s?.role === "superadmin";
+  if (!s) return null;
+  const isSuper = s.role === "superadmin";
+  const orgFilter = isSuper ? db`` : db`WHERE r.organization_id = ${s.organizationId}`;
   const rows = await db<RunRow[]>`
     SELECT r.id, r.country, r.gazette_number, r.date_public, r.n_candidates, r.n_own, r.created_at,
       o.name AS organization_name,
@@ -58,6 +60,7 @@ export default async function Historial() {
         jsonb_array_elements(g->'candidates') c
       WHERE c->>'relation' = 'conflict'
     ) counts
+    ${orgFilter}
     ORDER BY r.created_at DESC LIMIT 100`;
 
   return (
@@ -71,7 +74,7 @@ export default async function Historial() {
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-[var(--mut)]">
                 <th className="px-4 py-2 font-medium">Publicación</th>
-                <th className="px-4 py-2 font-medium">Organización</th>
+                {isSuper && <th className="px-4 py-2 font-medium">Organización</th>}
                 <th className="px-4 py-2 font-medium">Publicada</th>
                 <th className="w-[46%] px-4 py-2 font-medium">Distribución</th>
                 <th className="px-4 py-2 font-medium">Procesada</th>
@@ -86,7 +89,7 @@ export default async function Historial() {
                       {r.country}{r.gazette_number}
                     </Link>
                   </td>
-                  <td className="px-4 py-2.5">{r.organization_name ?? "Sin organización"}</td>
+                  {isSuper && <td className="px-4 py-2.5">{r.organization_name ?? "Sin organización"}</td>}
                   <td className="px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.date_public)}</td>
                   <td className="px-4 py-2.5"><BarcodeStat segments={distribution(r)} compact /></td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.created_at)}</td>

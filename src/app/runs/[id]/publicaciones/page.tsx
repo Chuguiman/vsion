@@ -19,11 +19,14 @@ export default async function PublicacionesPage({
   const runId = Number(id);
   const db = getDb();
   if (!db) return notFound();
-  if (!(await getSession())) return notFound();
+  const session = await getSession();
+  if (!session) return notFound();
 
-  const [run] = await db<{ country: string; gazette_number: string }[]>`
-    SELECT country, gazette_number FROM runs WHERE id = ${runId}`;
+  const [run] = await db<{ country: string; gazette_number: string; organization_id: number | null }[]>`
+    SELECT country, gazette_number, organization_id FROM runs WHERE id = ${runId}`;
   if (!run) return notFound();
+  // Aislamiento: solo el superadmin (o la propia organización) puede ver la publicación.
+  if (session.role !== "superadmin" && run.organization_id !== session.organizationId) return notFound();
 
   const q = (sp.q ?? "").trim();
   const page = Math.max(Number(sp.page ?? 1) || 1, 1);

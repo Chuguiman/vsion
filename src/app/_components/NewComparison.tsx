@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { UploadCloud, Loader2, FileJson, Database } from "lucide-react";
-import { runComparison, runComparisonFromDb, type RunResult } from "../actions";
+import { UploadCloud, Loader2, FileJson, Database, Archive } from "lucide-react";
+import {
+  runComparison, runComparisonFromDb, runComparisonFromGazetteAction,
+  carteraInfoAction, listReusableGazettesAction, type RunResult,
+} from "../actions";
+import type { ReusableGazette } from "@/lib/gazettes";
 import Results from "./Results";
 
 function Drop({ label, hint, file, onFile }: {
@@ -27,25 +31,54 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
   isSuper?: boolean;
 }) {
   const router = useRouter();
-  const hasCartera = !!carteraInfo && carteraInfo.count > 0;
   const [client, setClient] = useState<File | null>(null);
   const [gazette, setGazette] = useState<File | null>(null);
   const [orgId, setOrgId] = useState<string>(orgs.length === 1 ? String(orgs[0].id) : "");
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<RunResult | null>(null);
+  // superadmin: la cartera se resuelve por la org elegida; los demás usan la suya.
+  const [info, setInfo] = useState(carteraInfo);
+  // Fuente de la publicación: subir archivo o elegir una gaceta ya cargada.
+  const [source, setSource] = useState<"upload" | "reuse">("upload");
+  const [gazettes, setGazettes] = useState<ReusableGazette[]>([]);
+  const [gazetteId, setGazetteId] = useState<string>("");
   const needsOrg = isSuper && !orgId;
+  const hasCartera = !!info && info.count > 0;
+  const oid = orgId ? Number(orgId) : null;
+
+  useEffect(() => {
+    if (!isSuper) return;
+    if (!orgId) { setInfo(null); return; }
+    let alive = true;
+    carteraInfoAction(Number(orgId)).then((r) => { if (alive) setInfo(r); }).catch(() => { if (alive) setInfo(null); });
+    return () => { alive = false; };
+  }, [orgId, isSuper]);
+
+  // Gacetas reutilizables (país habilitado + con publicaciones + no comparadas por la org).
+  useEffect(() => {
+    if (isSuper && !orgId) { setGazettes([]); setGazetteId(""); return; }
+    let alive = true;
+    listReusableGazettesAction(isSuper ? Number(orgId) : null)
+      .then((r) => { if (alive) { setGazettes(r.gazettes ?? []); setGazetteId(""); } })
+      .catch(() => { if (alive) setGazettes([]); });
+    return () => { alive = false; };
+  }, [orgId, isSuper]);
 
   async function run() {
-    if (!gazette) return;
-    if (!hasCartera && !client) return;
     if (needsOrg) return;
     setBusy(true); setRes(null);
     try {
-      const gazetteText = await gazette.text();
-      const oid = orgId ? Number(orgId) : null;
-      const r = hasCartera
-        ? await runComparisonFromDb(gazetteText, oid)
-        : await runComparison(await client!.text(), gazetteText, oid);
+      let r: RunResult;
+      if (hasCartera && source === "reuse") {
+        if (!gazetteId) return;
+        r = await runComparisonFromGazetteAction(Number(gazetteId), oid);
+      } else if (hasCartera) {
+        if (!gazette) return;
+        r = await runComparisonFromDb(await gazette.text(), oid);
+      } else {
+        if (!gazette || !client) return;
+        r = await runComparison(await client.text(), await gazette.text(), oid);
+      }
       // Guardó en historial → ir a la vista de resultados dedicada.
       if (r.ok && r.runId) { router.push(`/runs/${r.runId}`); return; }
       setRes(r); // sin BD: mostrar inline como fallback
@@ -55,6 +88,10 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
       setBusy(false);
     }
   }
+
+  const canRun = !needsOrg && !busy && (
+    hasCartera ? (source === "reuse" ? !!gazetteId : !!gazette) : (!!gazette && !!client)
+  );
 
   return (
     <div>
@@ -76,17 +113,50 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
         <>
           <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-4 py-3 text-sm">
             <Database size={16} className="text-[var(--acc)]" />
-            <span className="font-medium">{carteraInfo!.count.toLocaleString()} marcas</span>
+            <span className="font-medium">{info!.count.toLocaleString()} marcas</span>
             <span className="text-[var(--mut)]">en cartera</span>
-            {carteraInfo!.updatedAt && (
-              <span className="text-xs text-[var(--mut)]">· importada {new Date(carteraInfo!.updatedAt).toLocaleDateString("es")}</span>
+            {info!.updatedAt && (
+              <span className="text-xs text-[var(--mut)]">· importada {new Date(info!.updatedAt).toLocaleDateString("es")}</span>
             )}
             <Link href="/cartera" className="ml-auto text-xs text-[var(--acc)] hover:underline">Reemplazar cartera</Link>
           </div>
-          <p className="mb-4 text-sm text-[var(--mut)]">Sube solo la publicación. Se compara contra tu cartera guardada.</p>
-          <div className="mb-4 max-w-md">
-            <Drop label="Publicación" hint="CO####.json" file={gazette} onFile={setGazette} />
+          <p className="mb-3 text-sm text-[var(--mut)]">Compara contra tu cartera guardada: sube la publicación o elige una gaceta ya cargada.</p>
+
+          {/* Pestañas: subir archivo o reutilizar una gaceta ya cargada */}
+          <div className="mb-4 inline-flex rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-0.5 text-sm">
+            <button type="button" onClick={() => setSource("upload")}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition ${source === "upload" ? "bg-[var(--acc)] text-black" : "text-[var(--mut)] hover:text-[var(--tx)]"}`}>
+              <FileJson size={15} /> Subir archivo
+            </button>
+            <button type="button" onClick={() => setSource("reuse")}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition ${source === "reuse" ? "bg-[var(--acc)] text-black" : "text-[var(--mut)] hover:text-[var(--tx)]"}`}>
+              <Archive size={15} /> Gaceta cargada{gazettes.length > 0 ? ` (${gazettes.length})` : ""}
+            </button>
           </div>
+
+          {source === "upload" ? (
+            <div className="mb-4 max-w-md">
+              <Drop label="Publicación" hint="CO####.json" file={gazette} onFile={setGazette} />
+            </div>
+          ) : (
+            <div className="mb-4 max-w-md">
+              <label className="mb-1 block text-xs font-medium text-[var(--mut)]">Gaceta ya cargada</label>
+              <select value={gazetteId} onChange={(e) => setGazetteId(e.target.value)}
+                className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2 text-sm outline-none focus:border-[var(--acc)]">
+                <option value="">Elige una gaceta…</option>
+                {gazettes.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.country}{g.number} · {g.pub_count.toLocaleString()} publicaciones{g.date_public ? ` · ${g.date_public}` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-[var(--mut)]">
+                {gazettes.length === 0
+                  ? "No hay gacetas pendientes. Aparecen las de países habilitados en Países, con publicaciones y que esta organización aún no comparó."
+                  : "Reutiliza las publicaciones e imágenes ya cargadas; no vuelve a subir el archivo."}
+              </p>
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -101,7 +171,7 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
         </>
       )}
 
-      <button onClick={run} disabled={!gazette || (!hasCartera && !client) || needsOrg || busy}
+      <button onClick={run} disabled={!canRun}
         className="inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-4 py-2 font-medium text-black disabled:opacity-40">
         {busy ? <Loader2 className="animate-spin" size={16} /> : <UploadCloud size={16} />}
         {busy ? "Procesando..." : "Comparar"}

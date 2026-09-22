@@ -14,7 +14,7 @@ const MODES: { id: ScopeMode; label: string; hint: string }[] = [
   { id: "exclude", label: "Excluir", hint: "Todas menos las seleccionadas abajo." },
 ];
 
-export default function ScopePanel({ country, name }: { country: string; name: string }) {
+export default function ScopePanel({ country, name, orgId = null }: { country: string; name: string; orgId?: number | null }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -31,7 +31,7 @@ export default function ScopePanel({ country, name }: { country: string; name: s
 
   useEffect(() => {
     (async () => {
-      const [r, h] = await Promise.all([getScopeAction(country), listHoldersAction()]);
+      const [r, h] = await Promise.all([getScopeAction(country, orgId), listHoldersAction(orgId)]);
       if (r.ok && r.scope) {
         setMode(r.scope.mode);
         setHolders(r.scope.holders);
@@ -41,14 +41,14 @@ export default function ScopePanel({ country, name }: { country: string; name: s
       if (h.ok) setHolderOpts(h.holders ?? []);
       setLoading(false);
     })();
-  }, [country]);
+  }, [country, orgId]);
 
   function markSaved() { setSaved(true); setTimeout(() => setSaved(false), 1500); }
 
   async function save() {
     setSaving(true);
     const caseIds = caseText.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
-    const r = await setScopeAction(country, mode, holders, caseIds);
+    const r = await setScopeAction(country, mode, holders, caseIds, orgId);
     setSaving(false);
     if (r.ok) markSaved();
   }
@@ -65,7 +65,7 @@ export default function ScopePanel({ country, name }: { country: string; name: s
     if (!value.trim()) { setResults([]); return; }
     setSearching(true);
     searchTimer.current = setTimeout(async () => {
-      const r = await searchMarksAction(value);
+      const r = await searchMarksAction(value, orgId);
       setResults(r.marks ?? []);
       setSearching(false);
     }, 250);
@@ -74,11 +74,11 @@ export default function ScopePanel({ country, name }: { country: string; name: s
   async function addMark(m: MarkLite) {
     if (marks.some((x) => x.id === m.id)) return;
     setMarks((p) => [...p, m]);
-    await addWatchMarkAction(country, m.id);
+    await addWatchMarkAction(country, m.id, orgId);
   }
   async function removeMark(id: number) {
     setMarks((p) => p.filter((x) => x.id !== id));
-    await removeWatchMarkAction(country, id);
+    await removeWatchMarkAction(country, id, orgId);
   }
 
   if (loading) return <div className="flex items-center gap-2 px-1 py-3 text-sm text-[var(--mut)]"><Loader2 size={14} className="animate-spin" /> Cargando perfil…</div>;
