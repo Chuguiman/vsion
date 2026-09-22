@@ -67,11 +67,11 @@ export default async function PublicacionesPage({
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-[var(--mut)]">
+                  <th className="px-3 py-2 font-medium">Expediente · Categoría · Tipo · Estado</th>
                   <th className="px-3 py-2 font-medium">Img</th>
                   <th className="px-3 py-2 font-medium">Marca</th>
                   <th className="px-3 py-2 font-medium">Clases</th>
                   <th className="px-3 py-2 font-medium">Solicitante / Apoderado</th>
-                  <th className="px-3 py-2 font-medium">Expediente · Categoría · Tipo · Estado</th>
                 </tr>
               </thead>
               <tbody>
@@ -79,11 +79,19 @@ export default async function PublicacionesPage({
                   const img = publicImageUrl(r.image_bucket, r.image_path);
                   return (
                   <tr key={r.id} className="border-b border-[var(--bd)] last:border-0 align-top hover:bg-white/5">
+                    <td className="px-3 py-2 text-[12px]">
+                      <span className="block font-mono text-[var(--tx)]">{r.application_number || "—"}</span>
+                      <span className="mt-0.5 block text-[var(--mut)]">
+                        {[r.mark_category, r.mark_type, r.status].filter(Boolean).join(" · ") || "—"}
+                      </span>
+                    </td>
                     <td className="px-3 py-2">
                       {img ? <ZoomImage src={img} alt={r.denom || "Figurativa"} /> : <span className="text-[var(--mut)]">—</span>}
                     </td>
                     <td className="px-3 py-2">
-                      {r.denom || <span className="text-[var(--mut)] italic">(figurativa)</span>}
+                      <span className={r.denom ? "font-semibold" : "font-semibold text-[var(--mut)] italic"}>
+                        {r.denom || "(figurativa)"}
+                      </span>
                       {r.pys && <span className="mt-0.5 block max-w-md truncate text-[11px] text-[var(--mut)]">{r.pys}</span>}
                     </td>
                     <td className="px-3 py-2">
@@ -97,12 +105,6 @@ export default async function PublicacionesPage({
                       <span className="block">{r.applicant || "—"}
                         {r.applicant_country && <span className="ml-1 text-[11px] text-[var(--mut)]">({r.applicant_country})</span>}</span>
                       {r.representant && <span className="mt-0.5 block text-[11px] text-teal-300">Apod.: {r.representant}</span>}
-                    </td>
-                    <td className="px-3 py-2 text-[12px]">
-                      <span className="block font-mono text-[var(--tx)]">{r.application_number || "—"}</span>
-                      <span className="mt-0.5 block text-[var(--mut)]">
-                        {[r.mark_category, r.mark_type, r.status].filter(Boolean).join(" · ") || "—"}
-                      </span>
                     </td>
                   </tr>
                   );
