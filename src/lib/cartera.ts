@@ -21,18 +21,18 @@ export async function importCartera(marks: ClientMark[], orgId: number | null): 
   const CHUNK = 500;
   for (let i = 0; i < marks.length; i += CHUNK) {
     const batch = marks.slice(i, i + CHUNK).map((m) => ({
-      case_id: m.id, code: m.code, denom: m.denom, classes: m.classes,
+      case_id: m.id, code: m.code, denom: m.denom, mark_type: m.markType, classes: m.classes,
       pys: m.pys, holder: m.holder, attorney: m.attorney, status: m.status,
       country: m.country, filed_date: m.filedDate, valid_until: m.validUntil, register_date: m.registerDate,
       organization_id: orgId,
     }));
-    await db`INSERT INTO client_marks ${db(batch, "case_id", "code", "denom", "classes", "pys", "holder", "attorney", "status", "country", "filed_date", "valid_until", "register_date", "organization_id")}`;
+    await db`INSERT INTO client_marks ${db(batch, "case_id", "code", "denom", "mark_type", "classes", "pys", "holder", "attorney", "status", "country", "filed_date", "valid_until", "register_date", "organization_id")}`;
   }
   return marks.length;
 }
 
 export interface CarteraMark {
-  id: number; denom: string; code: string; caseId: string; classes: number[];
+  id: number; denom: string; code: string; caseId: string; markType: string; classes: number[];
   pys: string; holder: string; status: string; country: string; imageUrl: string | null;
 }
 export interface CarteraMarksPage {
@@ -66,10 +66,10 @@ export async function listCarteraMarks(
     JOIN cartera_images ci ON ci.organization_id = cm.organization_id AND ci.code = cm.code
     WHERE cm.organization_id = ${orgId}`;
   const rows = await db<{
-    id: number; denom: string; code: string | null; case_id: string | null; classes: number[] | null;
+    id: number; denom: string; code: string | null; case_id: string | null; mark_type: string | null; classes: number[] | null;
     pys: string | null; holder: string | null; status: string | null; country: string | null; bucket: string | null; path: string | null;
   }[]>`
-    SELECT cm.id, cm.denom, cm.code, cm.case_id, cm.classes, cm.pys, cm.holder, cm.status, cm.country, ci.bucket, ci.path
+    SELECT cm.id, cm.denom, cm.code, cm.case_id, cm.mark_type, cm.classes, cm.pys, cm.holder, cm.status, cm.country, ci.bucket, ci.path
     FROM client_marks cm
     LEFT JOIN cartera_images ci ON ci.organization_id = cm.organization_id AND ci.code = cm.code
     WHERE cm.organization_id = ${orgId} ${qFilter} ${imgFilter}
@@ -77,7 +77,7 @@ export async function listCarteraMarks(
     LIMIT ${pageSize} OFFSET ${offset}`;
   return {
     rows: rows.map((r) => ({
-      id: r.id, denom: r.denom, code: r.code ?? "", caseId: r.case_id ?? "", classes: r.classes ?? [],
+      id: r.id, denom: r.denom, code: r.code ?? "", caseId: r.case_id ?? "", markType: r.mark_type ?? "", classes: r.classes ?? [],
       pys: r.pys ?? "", holder: r.holder ?? "", status: r.status ?? "", country: r.country ?? "",
       imageUrl: publicImageUrl(r.bucket, r.path),
     })),
@@ -126,12 +126,12 @@ export async function loadMarksFromDb(scope?: { orgId: number | null; country: s
   for (let i = 1; i < conds.length; i++) where = db`${where} AND ${conds[i]}`;
 
   const rows = await db<{
-    case_id: string | null; code: string | null; denom: string;
+    case_id: string | null; code: string | null; denom: string; mark_type: string | null;
     classes: number[] | null; pys: string | null; holder: string | null;
     attorney: string | null; status: string | null; country: string | null;
     filed_date: string | null; valid_until: string | null; register_date: string | null;
   }[]>`
-    SELECT cm.case_id, cm.code, cm.denom, cm.classes, cm.pys, cm.holder, cm.attorney, cm.status,
+    SELECT cm.case_id, cm.code, cm.denom, cm.mark_type, cm.classes, cm.pys, cm.holder, cm.attorney, cm.status,
            cm.country, cm.filed_date, cm.valid_until, cm.register_date
     FROM client_marks cm WHERE ${where}
   `;
@@ -139,6 +139,7 @@ export async function loadMarksFromDb(scope?: { orgId: number | null; country: s
     id: r.case_id ?? "",
     code: r.code ?? "",
     denom: r.denom,
+    markType: r.mark_type ?? "",
     classes: r.classes ?? [],
     pys: r.pys ?? "",
     holder: r.holder ?? "",

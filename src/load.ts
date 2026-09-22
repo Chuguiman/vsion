@@ -17,15 +17,19 @@ export function parseClientMarks(rows: any[]): ClientMark[] {
   const marks: ClientMark[] = [];
   for (const r of rows) {
     const denom = String(r.caso_titulo ?? "").trim();
-    if (!denom) continue;
+    const id = String(r.numero_de_caso_id ?? r.id ?? "");
+    const code = String(r.numero_de_caso_codigo ?? "");
+    // Conserva figurativas/3D/animadas (sin denominación) si traen identificador.
+    if (!denom && !id && !code) continue;
     // titular: "NOMBRE, DIRECCION, CIUDAD, DEPTO, PAIS" → nombre = [0], país = último token corto
     const titularParts = String(r.titular ?? "").split(",").map((s: string) => s.trim()).filter(Boolean);
     const last = titularParts[titularParts.length - 1] ?? "";
     const country = last.length <= 3 ? last.toUpperCase() : "";
     marks.push({
-      id: String(r.numero_de_caso_id ?? r.id ?? ""),
-      code: String(r.numero_de_caso_codigo ?? ""),
+      id,
+      code,
       denom,
+      markType: String(r.tipo_de_marca ?? r.tipo_marca ?? r.tipo ?? "").trim(),
       classes: parseClasses(r.descripcion_de_productos_y_servicios),
       pys: String(r.productos_y_servicios_descripcion ?? "").trim(),
       holder: titularParts[0] ?? "",
@@ -56,7 +60,10 @@ export function parseClientMarksFromGazette(doc: any): ClientMark[] {
   const marks: ClientMark[] = [];
   for (const d of doc?.details ?? []) {
     const denom = String(d.word ?? "").trim();
-    if (!denom) continue;
+    const id = String(d.applicationNumber ?? "").trim();
+    const code = String(d.official_number ?? "").trim();
+    // Conserva figurativas/3D/animadas (sin denominación) si traen identificador.
+    if (!denom && !id && !code) continue;
     const pys = Array.isArray(d.pys)
       ? d.pys.map((p: any) => `${p.clase ? p.clase + ". " : ""}${p.descripcion ?? ""}`).join(" ").trim()
       : "";
@@ -64,9 +71,10 @@ export function parseClientMarksFromGazette(doc: any): ClientMark[] {
     const rep = Array.isArray(d.representants) && d.representants[0] ? d.representants[0] : {};
     const country = String(d.paisrad ?? ap.aplicantCountry ?? "").trim().toUpperCase();
     marks.push({
-      id: String(d.applicationNumber ?? "").trim(),
-      code: String(d.official_number ?? "").trim(),
+      id,
+      code,
       denom,
+      markType: String(d.markType ?? "").trim(),
       classes: parseClasses(d.clases),
       pys,
       holder: String(ap.aplicantName ?? "").trim(),

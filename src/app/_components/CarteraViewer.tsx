@@ -84,8 +84,12 @@ export default function CarteraViewer({ orgs = [], isSuper = false }: {
                     : <span className="flex h-14 w-14 items-center justify-center rounded border border-dashed border-[var(--bd)] text-[var(--mut)]"><ImageOff size={18} /></span>}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-semibold">{m.denom || "(figurativa)"}</div>
-                  <div className="font-mono text-[11px] text-[var(--mut)]">{m.code || m.caseId || "—"}{m.status ? ` · ${m.status}` : ""}</div>
+                  <div className={`truncate font-semibold ${m.denom ? "" : "italic text-[var(--mut)]"}`}>{m.denom || `(${m.markType || "figurativa"})`}</div>
+                  <div className="font-mono text-[11px] text-[var(--mut)]">
+                    {m.code || m.caseId || "—"}
+                    {m.markType ? ` · ${m.markType}` : ""}
+                    {m.status ? ` · ${m.status}` : ""}
+                  </div>
                   {m.holder && <div className="truncate text-[11px] text-blue-300">{m.holder}</div>}
                   {m.classes.length > 0 && <div className="mt-1"><ClassChips classes={m.classes} pys={m.pys} /></div>}
                 </div>

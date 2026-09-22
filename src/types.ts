@@ -4,7 +4,8 @@ import type { PhoneticKeys } from "./phonetics";
 export interface ClientMark {
   id: string;
   code: string;           // numero_de_caso_codigo
-  denom: string;          // caso_titulo
+  denom: string;          // caso_titulo (vacío = figurativa/3D/animada)
+  markType: string;       // Mixta / Nominativa / Figurativa / Tridimensional / Animada…
   classes: number[];      // clases Niza
   pys: string;            // productos y servicios (texto)
   holder: string;         // titular (nombre)

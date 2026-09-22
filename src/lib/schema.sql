@@ -108,6 +108,9 @@ alter table client_marks add column if not exists valid_until text;
 alter table client_marks add column if not exists register_date text;
 -- Multi-organización: cada marca de cartera pertenece a una org (null = legado global).
 alter table client_marks add column if not exists organization_id bigint;
+-- Tipo de marca (Mixta / Nominativa / Figurativa / Tridimensional / Animada…).
+-- Permite conservar y mostrar las figurativas/3D/animadas (sin denominación).
+alter table client_marks add column if not exists mark_type text;
 create index if not exists client_marks_denom_idx on client_marks (denom);
 create index if not exists client_marks_org_idx on client_marks (organization_id);
 
