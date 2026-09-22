@@ -364,7 +364,7 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
     try {
       const { createApprovedExcel, createApprovedPdf, createFichasPdf, downloadExport } = await import("@/lib/review-export");
       const blob = await (format === "pdf_full"
-        ? createFichasPdf(approvedGroups, meta, images)
+        ? createFichasPdf(approvedGroups, meta, images, clientImages)
         : (format === "pdf" ? createApprovedPdf : createApprovedExcel)(approvedGroups, meta));
       const gazette = `${meta.country}${meta.number}`.replace(/[^a-zA-Z0-9_-]/g, "_");
       const ext = format === "xlsx" ? "xlsx" : "pdf";

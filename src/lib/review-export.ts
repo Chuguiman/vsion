@@ -198,7 +198,7 @@ async function urlToJpeg(url: string, max = 320): Promise<{ dataUrl: string; w: 
 }
 
 /** Reporte profesional: portada + tabla consolidada + una ficha por caso. */
-export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"], images: Record<string, string> = {}) {
+export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"], images: Record<string, string> = {}, clientImages: Record<string, string> = {}) {
   groups = reportGroups(groups, "conflict");
   const [{ jsPDF }, { autoTable }] = await Promise.all([import("jspdf"), import("jspdf-autotable")]);
   const items = groups.flatMap((g) => g.candidates.map((c) => ({ g, c })));
@@ -208,6 +208,12 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"],
   const wanted = new Map<string, string>();
   for (const g of groups) { const u = images[normImg(g.image)]; if (u) wanted.set(normImg(g.image), u); }
   await Promise.all([...wanted].map(async ([k, u]) => { const d = await urlToJpeg(u); if (d) pics.set(k, d); }));
+
+  // Prefetch de imágenes de la marca del cliente (una vez por código) → JPEG dataURL.
+  const cpics = new Map<string, { dataUrl: string; w: number; h: number }>();
+  const wantedC = new Map<string, string>();
+  for (const { c } of items) { const u = clientImages[c.clientCode]; if (u) wantedC.set(c.clientCode, u); }
+  await Promise.all([...wantedC].map(async ([k, u]) => { const d = await urlToJpeg(u); if (d) cpics.set(k, d); }));
   const nOpp = items.filter((x) => x.c.ai?.recommendation === "file_opposition").length;
   const nMon = items.filter((x) => x.c.ai?.recommendation === "monitor_closely").length;
 
@@ -301,6 +307,13 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"],
       const boxW = 42, ih = Math.min(32, boxW * pim.h / pim.w);
       try { doc.addImage(pim.dataUrl, "JPEG", xL, yL, boxW, ih); } catch { /* omite si falla */ }
       yL += ih + 3;
+    }
+    // Imagen de la marca del cliente (si existe)
+    const cim = cpics.get(c.clientCode);
+    if (cim) {
+      const boxW = 42, ih = Math.min(32, boxW * cim.h / cim.w);
+      try { doc.addImage(cim.dataUrl, "JPEG", xR, yR, boxW, ih); } catch { /* omite si falla */ }
+      yR += ih + 3;
     }
 
     yL = field(xL, yL, "Expediente", g.applicationNumber, colW);
