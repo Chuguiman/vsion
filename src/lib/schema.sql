@@ -174,6 +174,21 @@ create table if not exists mark_images (
   created_at timestamptz not null default now()
 );
 
+-- Imágenes de la CARTERA del cliente (marcas propias). Clave = (org, code), donde
+-- code es el código/expediente de la marca (== nombre de archivo). Se llena con
+-- scripts/ingest-cartera-images.mjs; la UI la une por client_marks.code + org.
+create table if not exists cartera_images (
+  organization_id bigint not null,
+  code            text   not null,
+  bucket          text   not null,
+  path            text   not null,
+  phash           text,
+  width           int,
+  height          int,
+  created_at      timestamptz not null default now(),
+  primary key (organization_id, code)
+);
+
 -- Fase 3: decisión humana por candidato (aprobar / descartar). Tabla aparte
 -- para no colisionar con la escritura del payload de 'runs' durante el análisis.
 create table if not exists reviews (
@@ -219,3 +234,4 @@ alter table watch_scopes       enable row level security;
 alter table watch_marks        enable row level security;
 alter table publications       enable row level security;
 alter table mark_images        enable row level security;
+alter table cartera_images     enable row level security;

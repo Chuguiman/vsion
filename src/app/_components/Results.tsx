@@ -84,8 +84,8 @@ function ReviewCell({ status, onSet }: { status?: ReviewStatus; onSet: (s: Revie
   );
 }
 
-function Row({ c, pub, reviewable, status, reviewer, onReview }: {
-  c: CandDTO; pub: PubDTO; reviewable: boolean; status?: ReviewStatus; reviewer?: string; onReview: (key: string, s: ReviewStatus | null) => void;
+function Row({ c, pub, reviewable, status, reviewer, onReview, clientImage }: {
+  c: CandDTO; pub: PubDTO; reviewable: boolean; status?: ReviewStatus; reviewer?: string; onReview: (key: string, s: ReviewStatus | null) => void; clientImage?: string;
 }) {
   const col = scoreColor(c.score);
   const dim = status === "discarded";
@@ -98,9 +98,14 @@ function Row({ c, pub, reviewable, status, reviewer, onReview }: {
         <span className="font-mono text-sm font-semibold" style={{ color: col }}>{c.score}</span>
       </td>
       <td className="px-4 py-2.5">
-        <div className={`font-semibold ${dim ? "line-through" : ""}`}>{c.clientDenom}</div>
-        <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
-        {c.clientHolder && <div className="text-xs text-blue-300">Titular: {c.clientHolder}</div>}
+        <div className="flex items-start gap-2">
+          {clientImage && <ZoomImage src={clientImage} alt={c.clientDenom} size={40} />}
+          <div className="min-w-0">
+            <div className={`font-semibold ${dim ? "line-through" : ""}`}>{c.clientDenom}</div>
+            <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
+            {c.clientHolder && <div className="text-xs text-blue-300">Titular: {c.clientHolder}</div>}
+          </div>
+        </div>
       </td>
       <td className="px-4 py-2.5 align-top"><ClassChips classes={c.clientClasses} pys={c.clientPys} match={c.matchingClasses} related={c.relatedClasses} /></td>
       <td className="px-4 py-2.5"><RelationCell c={c} /></td>
@@ -114,8 +119,8 @@ function Row({ c, pub, reviewable, status, reviewer, onReview }: {
   );
 }
 
-function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGroup, imageUrl }: {
-  g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; reviewers: Record<string, string>; onReview: (key: string, s: ReviewStatus | null) => void; onDiscardGroup?: (keys: string[]) => void; imageUrl?: string;
+function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGroup, imageUrl, clientImages = {} }: {
+  g: PubDTO; filter: Filter; reviewable: boolean; reviews: Record<string, ReviewStatus>; reviewers: Record<string, string>; onReview: (key: string, s: ReviewStatus | null) => void; onDiscardGroup?: (keys: string[]) => void; imageUrl?: string; clientImages?: Record<string, string>;
 }) {
   const rows = g.candidates.filter((c) => matchesFilter(c, filter));
   if (!rows.length) return null;
@@ -165,7 +170,7 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGro
           </tr>
         </thead>
         <tbody>{rows.map((c) => (
-          <Row key={candKeyOf(g, c)} c={c} pub={g} reviewable={reviewable} status={reviews[candKeyOf(g, c)]} reviewer={reviewers[candKeyOf(g, c)]} onReview={onReview} />
+          <Row key={candKeyOf(g, c)} c={c} pub={g} reviewable={reviewable} status={reviews[candKeyOf(g, c)]} reviewer={reviewers[candKeyOf(g, c)]} onReview={onReview} clientImage={clientImages[c.clientCode]} />
         ))}</tbody>
       </table>
 
@@ -174,15 +179,15 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGro
         {reviewable && <p className="text-[11px] text-[var(--mut)]">Desliza → aprobar · ← descartar</p>}
         {rows.map((c) => (
           <CandCard key={candKeyOf(g, c)} c={c} candKey={candKeyOf(g, c)} reviewable={reviewable}
-            status={reviews[candKeyOf(g, c)]} reviewer={reviewers[candKeyOf(g, c)]} onReview={onReview} />
+            status={reviews[candKeyOf(g, c)]} reviewer={reviewers[candKeyOf(g, c)]} onReview={onReview} clientImage={clientImages[c.clientCode]} />
         ))}
       </div>
     </section>
   );
 }
 
-export default function Results({ dto, runId, reviews: initialReviews, reviewers: initialReviewers, canEdit = false, images = {}, currentUser }: {
-  dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>; reviewers?: Record<string, string>; canEdit?: boolean; images?: Record<string, string>; currentUser?: string;
+export default function Results({ dto, runId, reviews: initialReviews, reviewers: initialReviewers, canEdit = false, images = {}, clientImages = {}, currentUser }: {
+  dto: ReportDTO; runId?: number; reviews?: Record<string, ReviewStatus>; reviewers?: Record<string, string>; canEdit?: boolean; images?: Record<string, string>; clientImages?: Record<string, string>; currentUser?: string;
 }) {
   const [selectedFilter, setFilter] = useState<Filter | null>(null);
   const [ai, setAi] = useState<{ running: boolean; analyzed: number; total: number; error?: string } | null>(null);
@@ -467,7 +472,7 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
       {(reviewError || exportError) && <p role="alert" className="mb-4 text-sm text-red-300">{reviewError || exportError}</p>}
 
       {visible.length ? visible.map((g) => (
-        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} reviewers={reviewers} onReview={onReview} onDiscardGroup={(keys) => discardKeys(keys)} imageUrl={images[g.image?.replace(/\.(webp|png|jpe?g)$/i, "")]} />
+        <Pub key={g.applicationNumber || g.denom} g={g} filter={filter} reviewable={reviewable} reviews={reviews} reviewers={reviewers} onReview={onReview} onDiscardGroup={(keys) => discardKeys(keys)} imageUrl={images[g.image?.replace(/\.(webp|png|jpe?g)$/i, "")]} clientImages={clientImages} />
       )) : <p className="text-[var(--mut)]">Sin resultados para este filtro.</p>}
     </div>
   );

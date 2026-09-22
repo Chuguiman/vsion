@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, History, Database, Users, Globe, UserCircle, LogOut, PanelLeftClose, PanelLeftOpen, Menu as MenuIcon, X } from "lucide-react";
+import { Search, History, Database, Users, Globe, UserCircle, Tag, LogOut, PanelLeftClose, PanelLeftOpen, Menu as MenuIcon, X } from "lucide-react";
 import { logoutAction } from "../auth-actions";
 
 const ICONS: Record<string, React.ReactNode> = {
   search: <Search size={15} />, history: <History size={15} />, database: <Database size={15} />,
-  users: <Users size={15} />, globe: <Globe size={15} />, profile: <UserCircle size={15} />,
+  users: <Users size={15} />, globe: <Globe size={15} />, profile: <UserCircle size={15} />, tag: <Tag size={15} />,
 };
 
 export interface NavLink { href: string; label: string; icon: string }

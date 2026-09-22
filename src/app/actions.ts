@@ -6,7 +6,7 @@ import { toReportDTO, type ReportDTO } from "@/lib/dto";
 import { getDb } from "@/lib/db";
 import { savePublications, loadGazetteEntries } from "@/lib/publications";
 import { upsertGazette, gazetteHasPublications, getGazetteMeta, listReusableGazettes, type ReusableGazette } from "@/lib/gazettes";
-import { importCartera, loadMarksFromDb, getCarteraInfo } from "@/lib/cartera";
+import { importCartera, loadMarksFromDb, getCarteraInfo, listCarteraMarks, type CarteraMarksPage } from "@/lib/cartera";
 import { analyzeRunBatch, type BatchResult } from "@/lib/ai-web";
 import { setReview, setReviewsBulk, getReviews, type ReviewStatus, type RunReviews } from "@/lib/reviews";
 import { getSession } from "@/lib/auth";
@@ -213,6 +213,22 @@ export async function carteraInfoAction(organizationId: number | null = null) {
   // superadmin puede consultar cualquier org; los demás, solo la suya.
   const orgId = s.role === "superadmin" ? organizationId : s.organizationId;
   return getCarteraInfo(orgId);
+}
+
+/** Marcas de la cartera (con imagen) para el visor. superadmin elige org; otros la suya. */
+export async function listCarteraMarksAction(
+  organizationId: number | null,
+  opts: { q?: string; page?: number; pageSize?: number; onlyImages?: boolean } = {}
+): Promise<{ ok: boolean; page?: CarteraMarksPage; error?: string }> {
+  const s = await getSession();
+  if (!s) return { ok: false, error: "No autenticado." };
+  const orgId = s.role === "superadmin" ? organizationId : s.organizationId;
+  if (orgId == null) return { ok: true, page: { rows: [], total: 0, page: 1, pageSize: 48, pages: 0, withImages: 0 } };
+  try {
+    return { ok: true, page: await listCarteraMarks(orgId, opts) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Error." };
+  }
 }
 
 /** Aislamiento por organización: ¿la sesión puede operar sobre este run? */

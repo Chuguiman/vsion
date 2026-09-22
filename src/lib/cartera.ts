@@ -1,6 +1,7 @@
 import { getDb } from "./db";
 import { computeKeys } from "@/phonetics";
 import { getScope } from "./scopes";
+import { publicImageUrl } from "./publications";
 import type { ClientMark } from "@/types";
 
 /** Fragmento SQL para filtrar por organización (null = cartera legado global). */
@@ -28,6 +29,60 @@ export async function importCartera(marks: ClientMark[], orgId: number | null): 
     await db`INSERT INTO client_marks ${db(batch, "case_id", "code", "denom", "classes", "pys", "holder", "attorney", "status", "country", "filed_date", "valid_until", "register_date", "organization_id")}`;
   }
   return marks.length;
+}
+
+export interface CarteraMark {
+  id: number; denom: string; code: string; caseId: string; classes: number[];
+  pys: string; holder: string; status: string; country: string; imageUrl: string | null;
+}
+export interface CarteraMarksPage {
+  rows: CarteraMark[]; total: number; page: number; pageSize: number; pages: number; withImages: number;
+}
+
+/** Marcas de la cartera de una org (paginadas, con imagen si existe). Para el visor. */
+export async function listCarteraMarks(
+  orgId: number | null,
+  opts: { q?: string; page?: number; pageSize?: number; onlyImages?: boolean } = {}
+): Promise<CarteraMarksPage> {
+  const db = getDb();
+  const pageSize = Math.min(Math.max(opts.pageSize ?? 48, 12), 120);
+  const page = Math.max(opts.page ?? 1, 1);
+  const offset = (page - 1) * pageSize;
+  const empty: CarteraMarksPage = { rows: [], total: 0, page, pageSize, pages: 0, withImages: 0 };
+  if (!db || orgId == null) return empty;
+
+  const q = (opts.q ?? "").trim();
+  const qFilter = q
+    ? db`AND (cm.denom ILIKE ${"%" + q + "%"} OR cm.code ILIKE ${"%" + q + "%"} OR cm.case_id ILIKE ${"%" + q + "%"} OR cm.holder ILIKE ${"%" + q + "%"})`
+    : db``;
+  const imgFilter = opts.onlyImages ? db`AND ci.path IS NOT NULL` : db``;
+
+  const [{ n }] = await db<{ n: number }[]>`
+    SELECT count(*)::int AS n FROM client_marks cm
+    LEFT JOIN cartera_images ci ON ci.organization_id = cm.organization_id AND ci.code = cm.code
+    WHERE cm.organization_id = ${orgId} ${qFilter} ${imgFilter}`;
+  const [{ w }] = await db<{ w: number }[]>`
+    SELECT count(*)::int AS w FROM client_marks cm
+    JOIN cartera_images ci ON ci.organization_id = cm.organization_id AND ci.code = cm.code
+    WHERE cm.organization_id = ${orgId}`;
+  const rows = await db<{
+    id: number; denom: string; code: string | null; case_id: string | null; classes: number[] | null;
+    pys: string | null; holder: string | null; status: string | null; country: string | null; bucket: string | null; path: string | null;
+  }[]>`
+    SELECT cm.id, cm.denom, cm.code, cm.case_id, cm.classes, cm.pys, cm.holder, cm.status, cm.country, ci.bucket, ci.path
+    FROM client_marks cm
+    LEFT JOIN cartera_images ci ON ci.organization_id = cm.organization_id AND ci.code = cm.code
+    WHERE cm.organization_id = ${orgId} ${qFilter} ${imgFilter}
+    ORDER BY (ci.path IS NULL), cm.denom
+    LIMIT ${pageSize} OFFSET ${offset}`;
+  return {
+    rows: rows.map((r) => ({
+      id: r.id, denom: r.denom, code: r.code ?? "", caseId: r.case_id ?? "", classes: r.classes ?? [],
+      pys: r.pys ?? "", holder: r.holder ?? "", status: r.status ?? "", country: r.country ?? "",
+      imageUrl: publicImageUrl(r.bucket, r.path),
+    })),
+    total: n, page, pageSize, pages: Math.max(1, Math.ceil(n / pageSize)), withImages: w,
+  };
 }
 
 export async function getCarteraInfo(orgId: number | null = null): Promise<{ count: number; updatedAt: string | null } | null> {

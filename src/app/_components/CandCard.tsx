@@ -5,6 +5,7 @@ import { Check, X } from "lucide-react";
 import type { CandDTO, PubDTO, Relation, AiVerdict } from "@/lib/dto";
 import type { ReviewStatus } from "@/lib/reviews";
 import ClassChips from "./ClassChips";
+import ZoomImage from "./ZoomImage";
 
 const REL_LABEL: Record<Relation, string> = { conflict: "Conflicto", firm: "Tu firma", own: "Tu marca" };
 const REL_CLASS: Record<Relation, string> = {
@@ -18,9 +19,9 @@ function scoreColor(s: number) { const t = Math.max(0, Math.min(1, (s - 55) / 45
 
 const THRESHOLD = 72;
 
-export default function CandCard({ c, candKey, status, reviewer, reviewable, onReview }: {
+export default function CandCard({ c, candKey, status, reviewer, reviewable, onReview, clientImage }: {
   c: CandDTO; candKey: string; status?: ReviewStatus; reviewer?: string; reviewable: boolean;
-  onReview: (key: string, s: ReviewStatus | null) => void;
+  onReview: (key: string, s: ReviewStatus | null) => void; clientImage?: string;
 }) {
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -63,10 +64,13 @@ export default function CandCard({ c, candKey, status, reviewer, reviewable, onR
         onTouchEnd={onEnd}
       >
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className={`font-semibold ${dim ? "line-through" : ""}`}>{c.clientDenom}</div>
-            <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
-            {c.clientHolder && <div className="truncate text-xs text-blue-300">Titular: {c.clientHolder}</div>}
+          <div className="flex min-w-0 items-start gap-2">
+            {clientImage && <ZoomImage src={clientImage} alt={c.clientDenom} size={40} />}
+            <div className="min-w-0">
+              <div className={`font-semibold ${dim ? "line-through" : ""}`}>{c.clientDenom}</div>
+              <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
+              {c.clientHolder && <div className="truncate text-xs text-blue-300">Titular: {c.clientHolder}</div>}
+            </div>
           </div>
           <div className="shrink-0 text-right">
             <span className="font-mono text-lg font-bold" style={{ color: col }}>{c.score}</span>

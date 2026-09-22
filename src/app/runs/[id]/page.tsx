@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { getReviews } from "@/lib/reviews";
 import { publicImageUrl } from "@/lib/publications";
+import { getCarteraImageUrls } from "@/lib/cartera-images";
 import Results from "@/app/_components/Results";
 import type { ReportDTO } from "@/lib/dto";
 
@@ -41,6 +42,11 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
     if (url) images[normId(r.image_id)] = url;
   }
 
+  // Imágenes de la cartera del cliente (por código) para las marcas de esta corrida.
+  const codes = new Set<string>();
+  for (const g of row.payload.groups ?? []) for (const c of g.candidates ?? []) if (c.clientCode) codes.add(c.clientCode);
+  const clientImages = await getCarteraImageUrls(row.organization_id, [...codes]);
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -52,7 +58,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
           Ver publicación completa →
         </Link>
       </div>
-      <Results dto={row.payload} runId={Number(id)} reviews={statuses} reviewers={reviewers} canEdit={canEdit} images={images} currentUser={session.name || session.email} />
+      <Results dto={row.payload} runId={Number(id)} reviews={statuses} reviewers={reviewers} canEdit={canEdit} images={images} clientImages={clientImages} currentUser={session.name || session.email} />
     </div>
   );
 }
