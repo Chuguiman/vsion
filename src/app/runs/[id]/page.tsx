@@ -22,7 +22,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   const session = await getSession();
   if (!session) return notFound();
   // Aislamiento: solo el superadmin (o la propia organización) puede ver la corrida.
-  if (session.role !== "superadmin" && row.organization_id !== session.organizationId) return notFound();
+  if (session.role !== "superadmin" && Number(row.organization_id) !== session.organizationId) return notFound();
   const { statuses, reviewers } = await getReviews(Number(id));
   const canEdit = true; // workspace compartido: cualquier usuario puede revisar/exportar
 

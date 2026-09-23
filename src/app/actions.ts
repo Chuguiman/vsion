@@ -239,7 +239,7 @@ async function canAccessRun(runId: number): Promise<boolean> {
   const db = getDb();
   if (!db) return false;
   const [r] = await db<{ organization_id: number | null }[]>`SELECT organization_id FROM runs WHERE id = ${runId}`;
-  return !!r && r.organization_id === s.organizationId;
+  return !!r && r.organization_id != null && Number(r.organization_id) === s.organizationId;
 }
 
 /** Fase 2: analiza un lote de conflictos con IA y persiste. El cliente llama en bucle. */

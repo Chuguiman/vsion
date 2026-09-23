@@ -26,7 +26,7 @@ export default async function PublicacionesPage({
     SELECT country, gazette_number, organization_id FROM runs WHERE id = ${runId}`;
   if (!run) return notFound();
   // Aislamiento: solo el superadmin (o la propia organización) puede ver la publicación.
-  if (session.role !== "superadmin" && run.organization_id !== session.organizationId) return notFound();
+  if (session.role !== "superadmin" && Number(run.organization_id) !== session.organizationId) return notFound();
 
   const q = (sp.q ?? "").trim();
   const page = Math.max(Number(sp.page ?? 1) || 1, 1);
