@@ -193,7 +193,15 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
   const [ai, setAi] = useState<{ running: boolean; analyzed: number; total: number; error?: string } | null>(null);
   const [reviews, setReviews] = useState<Record<string, ReviewStatus>>(initialReviews ?? {});
   const [reviewers, setReviewers] = useState<Record<string, string>>(initialReviewers ?? {});
-  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("pending");
+  // Pestaña inicial: Pendientes si queda alguna en la vista por defecto; si no, Aprobadas (o Todas si tampoco hay).
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>(() => {
+    const r = initialReviews ?? {};
+    const aiDone = dto.groups.some((g) => g.candidates.some((c) => c.relation === "conflict" && c.ai));
+    const f: Filter = aiDone ? "ai_selected" : "conflict";
+    const statuses = dto.groups.flatMap((g) => g.candidates.filter((c) => matchesFilter(c, f)).map((c) => r[candKeyOf(g, c)]));
+    if (statuses.some((s) => !s)) return "pending";
+    return statuses.includes("approved") ? "approved" : "all";
+  });
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [savingCount, setSavingCount] = useState(0);
   const [bulkBusy, setBulkBusy] = useState(false);
