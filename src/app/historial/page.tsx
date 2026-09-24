@@ -83,13 +83,18 @@ export default async function Historial() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-[var(--mut)]">
-                <th className="px-4 py-2 font-medium">Publicación</th>
-                {isSuper && <th className="px-4 py-2 font-medium">Organización</th>}
-                <th className="px-4 py-2 font-medium">Publicada</th>
-                <th className="px-4 py-2 font-medium">Hits / matches</th>
-                <th className="w-[40%] px-4 py-2 font-medium">Distribución</th>
-                <th className="px-4 py-2 font-medium">Procesada</th>
-                {isSuper && <th className="px-4 py-2 font-medium"></th>}
+                <th rowSpan={2} className="px-4 py-2 font-medium">Publicación</th>
+                {isSuper && <th rowSpan={2} className="px-4 py-2 font-medium">Organización</th>}
+                <th rowSpan={2} className="px-4 py-2 font-medium">Publicada</th>
+                <th colSpan={5} className="border-b border-[var(--bd)] px-2 pb-1 pt-2 text-center font-medium">Hits / matches</th>
+                <th rowSpan={2} className="w-[40%] px-4 py-2 font-medium">Distribución</th>
+                <th rowSpan={2} className="px-4 py-2 font-medium">Procesada</th>
+                {isSuper && <th rowSpan={2} className="px-4 py-2 font-medium"></th>}
+              </tr>
+              <tr className="text-[10px] text-[var(--mut)]" title="Revisión de las seleccionadas por IA (oponerse + vigilar)">
+                {["Hits", "Pendientes", "Aprobadas", "Descartadas", "Todas (IA)"].map((h) => (
+                  <th key={h} className="whitespace-nowrap px-2 pb-2 pt-1 text-center font-medium">{h}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -102,24 +107,21 @@ export default async function Historial() {
                   </td>
                   {isSuper && <td className="px-4 py-2.5">{r.organization_name ?? "Sin organización"}</td>}
                   <td className="px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.date_public)}</td>
-                  <td className="px-4 py-2.5">
-                    <div className="flex items-center gap-3 whitespace-nowrap">
-                      <span title="Candidatos retenidos por el barrido de similitud"
-                        className="inline-flex min-w-8 items-center justify-center rounded border border-[var(--acc)]/40 bg-[var(--acc)]/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-[var(--acc)]">
-                        {r.n_candidates.toLocaleString()}
-                      </span>
-                      {r.n_analyzed > 0 ? (
-                        <span className="flex items-center gap-2.5 text-[11px] text-[var(--mut)]" title="Revisión de las seleccionadas por IA (oponerse + vigilar)">
-                          <span>Pendientes <b className={`font-mono ${pending(r) > 0 ? "text-amber-500" : "text-[var(--tx)]"}`}>{pending(r)}</b></span>
-                          <span>Aprobadas <b className="font-mono text-[var(--tx)]">{r.n_approved}</b></span>
-                          <span>Descartadas <b className="font-mono text-[var(--tx)]">{r.n_discarded}</b></span>
-                          <span>Todas (IA) <b className="font-mono text-[var(--tx)]">{r.n_ai_selected}</b></span>
-                        </span>
-                      ) : (
-                        <span className="text-[11px] text-[var(--mut)]">Sin análisis IA</span>
-                      )}
-                    </div>
+                  <td className="px-2 py-2.5 text-center" title="Candidatos retenidos por el barrido de similitud">
+                    <span className="inline-flex min-w-8 items-center justify-center rounded border border-[var(--acc)]/40 bg-[var(--acc)]/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-[var(--acc)]">
+                      {r.n_candidates.toLocaleString()}
+                    </span>
                   </td>
+                  {r.n_analyzed > 0 ? (
+                    <>
+                      <td className={`px-2 py-2.5 text-center font-mono text-xs ${pending(r) > 0 ? "font-semibold text-amber-500" : "text-[var(--mut)]"}`}>{pending(r)}</td>
+                      <td className="px-2 py-2.5 text-center font-mono text-xs">{r.n_approved}</td>
+                      <td className="px-2 py-2.5 text-center font-mono text-xs">{r.n_discarded}</td>
+                      <td className="px-2 py-2.5 text-center font-mono text-xs">{r.n_ai_selected}</td>
+                    </>
+                  ) : (
+                    <td colSpan={4} className="px-2 py-2.5 text-center text-[11px] text-[var(--mut)]">Sin análisis IA</td>
+                  )}
                   <td className="px-4 py-2.5"><BarcodeStat segments={distribution(r)} compact /></td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.created_at)}</td>
                   {isSuper && <td className="px-4 py-2.5 text-right"><DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} /></td>}
