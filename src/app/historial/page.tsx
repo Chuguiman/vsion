@@ -65,7 +65,8 @@ export default async function Historial() {
 
   return (
     <div>
-      <h1 className="mb-4 text-xl font-semibold">Vigilancia</h1>
+      <h1 className="mb-1 text-xl font-semibold">Vigilancia</h1>
+      <p className="mb-4 text-sm text-[var(--mut)]">Comparaciones ejecutadas y hits/matches encontrados en cada gaceta.</p>
       {rows.length === 0 ? (
         <p className="text-sm text-[var(--mut)]">Aún no hay corridas.</p>
       ) : (
@@ -76,7 +77,8 @@ export default async function Historial() {
                 <th className="px-4 py-2 font-medium">Publicación</th>
                 {isSuper && <th className="px-4 py-2 font-medium">Organización</th>}
                 <th className="px-4 py-2 font-medium">Publicada</th>
-                <th className="w-[46%] px-4 py-2 font-medium">Distribución</th>
+                <th className="px-4 py-2 font-medium">Hits / matches</th>
+                <th className="w-[40%] px-4 py-2 font-medium">Distribución</th>
                 <th className="px-4 py-2 font-medium">Procesada</th>
                 {isSuper && <th className="px-4 py-2 font-medium"></th>}
               </tr>
@@ -91,6 +93,11 @@ export default async function Historial() {
                   </td>
                   {isSuper && <td className="px-4 py-2.5">{r.organization_name ?? "Sin organización"}</td>}
                   <td className="px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.date_public)}</td>
+                  <td className="px-4 py-2.5" title="Candidatos retenidos por el barrido de similitud">
+                    <span className="inline-flex min-w-10 items-center justify-center rounded-md border border-[var(--acc)]/40 bg-[var(--acc)]/10 px-2 py-1 font-mono text-sm font-semibold text-[var(--acc)]">
+                      {r.n_candidates.toLocaleString()}
+                    </span>
+                  </td>
                   <td className="px-4 py-2.5"><BarcodeStat segments={distribution(r)} compact /></td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.created_at)}</td>
                   {isSuper && <td className="px-4 py-2.5 text-right"><DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} /></td>}

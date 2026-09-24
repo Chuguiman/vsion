@@ -231,6 +231,84 @@ export async function listCarteraMarksAction(
   }
 }
 
+export interface MarkMatch {
+  runId: number;
+  country: string;
+  gazetteNumber: string;
+  datePublic: string | null;
+  createdAt: string;
+  publicationDenom: string;
+  applicationNumber: string;
+  applicant: string;
+  representant: string;
+  markType: string;
+  publicationClasses: number[];
+  score: number;
+  clientClasses: number[];
+  matchingClasses: number[];
+  relatedClasses: number[];
+  relation: "own" | "firm" | "conflict";
+  aiRecommendation: string | null;
+  aiProb: number | null;
+  aiSummary: string | null;
+  reviewStatus: "approved" | "discarded" | null;
+  reviewer: string | null;
+}
+
+/** Matches de una marca de cartera en las comparaciones de su organización. */
+export async function getMarkMatchesAction(clientCode: string): Promise<{ ok: boolean; matches?: MarkMatch[]; error?: string }> {
+  const s = await getSession();
+  if (!s) return { ok: false, error: "No autenticado." };
+  const db = getDb();
+  if (!db) return { ok: true, matches: [] };
+  const orgFilter = s.role === "superadmin" ? db`` : db`AND r.organization_id = ${s.organizationId}`;
+  try {
+    const rows = await db<{
+      run_id: number; country: string; gazette_number: string; date_public: string | null; created_at: string;
+      publication_denom: string; application_number: string; applicant: string; representant: string; mark_type: string;
+      publication_classes: number[] | null; score: number; client_classes: number[] | null;
+      matching_classes: number[] | null; related_classes: number[] | null; relation: "own" | "firm" | "conflict";
+      ai_recommendation: string | null; ai_prob: number | null; ai_summary: string | null;
+      review_status: "approved" | "discarded" | null; reviewer: string | null;
+    }[]>`
+      SELECT r.id AS run_id, r.country, r.gazette_number, r.date_public, r.created_at,
+        g->>'denom' AS publication_denom,
+        g->>'applicationNumber' AS application_number,
+        g->>'applicant' AS applicant,
+        g->>'representant' AS representant,
+        g->>'markType' AS mark_type,
+        g->'classes' AS publication_classes,
+        (c->>'score')::int AS score,
+        c->'clientClasses' AS client_classes,
+        c->'matchingClasses' AS matching_classes,
+        c->'relatedClasses' AS related_classes,
+        c->>'relation' AS relation,
+        c->'ai'->>'recommendation' AS ai_recommendation,
+        (c->'ai'->>'prob')::int AS ai_prob,
+        c->'ai'->>'summary' AS ai_summary,
+        rv.status AS review_status,
+        rv.reviewer_name AS reviewer
+      FROM runs r
+      CROSS JOIN LATERAL jsonb_array_elements(r.payload->'groups') g
+      CROSS JOIN LATERAL jsonb_array_elements(g->'candidates') c
+      LEFT JOIN reviews rv ON rv.run_id = r.id
+        AND rv.cand_key = concat(COALESCE(NULLIF(g->>'applicationNumber', ''), g->>'denom'), '::', c->>'clientCode', '::', c->>'clientDenom')
+      WHERE c->>'clientCode' = ${clientCode} ${orgFilter}
+      ORDER BY r.created_at DESC, (c->>'score')::int DESC`;
+    return { ok: true, matches: rows.map((r) => ({
+      runId: r.run_id, country: r.country, gazetteNumber: r.gazette_number, datePublic: r.date_public,
+      createdAt: r.created_at, publicationDenom: r.publication_denom || "Figurativa", applicationNumber: r.application_number || "",
+      applicant: r.applicant || "", representant: r.representant || "", markType: r.mark_type || "",
+      publicationClasses: r.publication_classes ?? [], score: r.score, clientClasses: r.client_classes ?? [],
+      matchingClasses: r.matching_classes ?? [], relatedClasses: r.related_classes ?? [], relation: r.relation,
+      aiRecommendation: r.ai_recommendation, aiProb: r.ai_prob, aiSummary: r.ai_summary,
+      reviewStatus: r.review_status, reviewer: r.reviewer,
+    })) };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudieron cargar los matches." };
+  }
+}
+
 /** Aislamiento por organización: ¿la sesión puede operar sobre este run? */
 async function canAccessRun(runId: number): Promise<boolean> {
   const s = await getSession();

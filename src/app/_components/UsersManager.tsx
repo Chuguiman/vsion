@@ -7,6 +7,7 @@ import { createUserAction, setRoleAction, deleteUserAction, createOrgAction, set
 import type { Role } from "@/lib/auth";
 import type { UserRow } from "@/lib/users";
 import type { Org } from "@/lib/organizations";
+import StyledSelect from "./StyledSelect";
 
 const ROLE_LABEL: Record<string, string> = { superadmin: "Superadmin", admin: "Administrador", user: "Usuario" };
 
@@ -86,16 +87,14 @@ export default function UsersManager({ users, orgs, role, currentUserId, current
           <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required className={`${input} w-52`} /></div>
         {isSuper && (
           <div><label className={lbl}>Organización</label>
-            <select value={form.organizationId} onChange={(e) => setForm({ ...form, organizationId: e.target.value })} required className={input}>
-              <option value="">Elegir…</option>
-              {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-            </select></div>
+            <StyledSelect value={form.organizationId} onChange={(value) => setForm({ ...form, organizationId: value })} required ariaLabel="Organización"
+              options={[{ value: "", label: "Elegir…" }, ...orgs.map((o) => ({ value: String(o.id), label: o.name }))]} />
+          </div>
         )}
         <div><label className={lbl}>Rol</label>
-          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })} className={input}>
-            <option value="user">Usuario</option>
-            <option value="admin">Administrador</option>
-          </select></div>
+          <StyledSelect value={form.role} onChange={(value) => setForm({ ...form, role: value as Role })} ariaLabel="Rol"
+            options={[{ value: "user", label: "Usuario" }, { value: "admin", label: "Administrador" }]} />
+        </div>
         <button disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-4 py-2 text-sm font-medium text-black disabled:opacity-40">
           {busy ? <Loader2 size={15} className="animate-spin" /> : <UserPlus size={15} />} Crear con contraseña temporal
         </button>
@@ -138,20 +137,15 @@ export default function UsersManager({ users, orgs, role, currentUserId, current
                   {isSuper && (
                     <td className="px-4 py-2.5">
                       {u.role === "superadmin" ? <span className="text-[var(--acc)]">— global</span> : (
-                        <select defaultValue={u.organization_id ?? ""} onChange={(e) => changeOrg(u.id, e.target.value)}
-                          className="rounded-md border border-[var(--bd)] bg-[var(--bg)] px-2 py-1 text-xs">
-                          <option value="">Sin organización</option>
-                          {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                        </select>
+                        <StyledSelect compact defaultValue={u.organization_id ? String(u.organization_id) : ""} onChange={(value) => changeOrg(u.id, value)} ariaLabel={`Organización de ${u.name}`}
+                          options={[{ value: "", label: "Sin organización" }, ...orgs.map((o) => ({ value: String(o.id), label: o.name }))]} />
                       )}
                     </td>
                   )}
                   <td className="px-4 py-2.5">
                     {editable ? (
-                      <select defaultValue={u.role} onChange={(e) => changeRole(u.id, e.target.value as Role)} className="rounded-md border border-[var(--bd)] bg-[var(--bg)] px-2 py-1 text-xs">
-                        <option value="user">Usuario</option>
-                        <option value="admin">Administrador</option>
-                      </select>
+                      <StyledSelect compact defaultValue={u.role} onChange={(value) => changeRole(u.id, value as Role)} ariaLabel={`Rol de ${u.name}`}
+                        options={[{ value: "user", label: "Usuario" }, { value: "admin", label: "Administrador" }]} />
                     ) : <span className={u.role === "superadmin" ? "text-[var(--acc)]" : ""}>{ROLE_LABEL[u.role]}</span>}
                   </td>
                   <td className="px-4 py-2.5 text-right">

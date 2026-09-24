@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { UploadCloud, Loader2, FileJson, Database } from "lucide-react";
 import { importCarteraAction, carteraInfoAction } from "../actions";
+import StyledSelect from "./StyledSelect";
 
 type Info = { count: number; updatedAt: string | null };
 
@@ -59,11 +60,8 @@ export default function CarteraManager({ orgs }: { orgs: { id: number; name: str
 
       <div className="mb-5 max-w-md">
         <label className="mb-1 block text-xs font-medium text-[var(--mut)]">Organización</label>
-        <select value={orgId} onChange={(e) => onSelectOrg(e.target.value)}
-          className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2 text-sm outline-none focus:border-[var(--acc)]">
-          <option value="">Elige una organización…</option>
-          {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-        </select>
+        <StyledSelect value={orgId} onChange={onSelectOrg} ariaLabel="Organización"
+          options={[{ value: "", label: "Elige una organización…" }, ...orgs.map((o) => ({ value: String(o.id), label: o.name }))]} />
         {orgs.length === 0 && <p className="mt-1 text-xs text-amber-400">No hay organizaciones. Crea una en Usuarios.</p>}
       </div>
 

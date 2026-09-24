@@ -33,7 +33,8 @@ export async function importCartera(marks: ClientMark[], orgId: number | null): 
 
 export interface CarteraMark {
   id: number; denom: string; code: string; caseId: string; markType: string; classes: number[];
-  pys: string; holder: string; status: string; country: string; imageUrl: string | null;
+  pys: string; holder: string; attorney: string; status: string; country: string;
+  filedDate: string; validUntil: string; registerDate: string; imageUrl: string | null;
 }
 export interface CarteraMarksPage {
   rows: CarteraMark[]; total: number; page: number; pageSize: number; pages: number; withImages: number;
@@ -67,9 +68,11 @@ export async function listCarteraMarks(
     WHERE cm.organization_id = ${orgId}`;
   const rows = await db<{
     id: number; denom: string; code: string | null; case_id: string | null; mark_type: string | null; classes: number[] | null;
-    pys: string | null; holder: string | null; status: string | null; country: string | null; bucket: string | null; path: string | null;
+    pys: string | null; holder: string | null; attorney: string | null; status: string | null; country: string | null;
+    filed_date: string | null; valid_until: string | null; register_date: string | null; bucket: string | null; path: string | null;
   }[]>`
-    SELECT cm.id, cm.denom, cm.code, cm.case_id, cm.mark_type, cm.classes, cm.pys, cm.holder, cm.status, cm.country, ci.bucket, ci.path
+    SELECT cm.id, cm.denom, cm.code, cm.case_id, cm.mark_type, cm.classes, cm.pys, cm.holder, cm.attorney, cm.status, cm.country,
+           cm.filed_date, cm.valid_until, cm.register_date, ci.bucket, ci.path
     FROM client_marks cm
     LEFT JOIN cartera_images ci ON ci.organization_id = cm.organization_id AND ci.code = cm.code
     WHERE cm.organization_id = ${orgId} ${qFilter} ${imgFilter}
@@ -78,7 +81,8 @@ export async function listCarteraMarks(
   return {
     rows: rows.map((r) => ({
       id: r.id, denom: r.denom, code: r.code ?? "", caseId: r.case_id ?? "", markType: r.mark_type ?? "", classes: r.classes ?? [],
-      pys: r.pys ?? "", holder: r.holder ?? "", status: r.status ?? "", country: r.country ?? "",
+      pys: r.pys ?? "", holder: r.holder ?? "", attorney: r.attorney ?? "", status: r.status ?? "", country: r.country ?? "",
+      filedDate: r.filed_date ?? "", validUntil: r.valid_until ?? "", registerDate: r.register_date ?? "",
       imageUrl: publicImageUrl(r.bucket, r.path),
     })),
     total: n, page, pageSize, pages: Math.max(1, Math.ceil(n / pageSize)), withImages: w,

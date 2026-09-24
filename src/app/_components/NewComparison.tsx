@@ -10,6 +10,7 @@ import {
 } from "../actions";
 import type { ReusableGazette } from "@/lib/gazettes";
 import Results from "./Results";
+import StyledSelect from "./StyledSelect";
 
 function Drop({ label, hint, file, onFile }: {
   label: string; hint: string; file: File | null; onFile: (f: File | null) => void;
@@ -100,11 +101,8 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
       {isSuper && (
         <div className="mb-5 max-w-md">
           <label className="mb-1 block text-xs font-medium text-[var(--mut)]">Organización de esta corrida</label>
-          <select value={orgId} onChange={(e) => setOrgId(e.target.value)}
-            className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2 text-sm outline-none focus:border-[var(--acc)]">
-            <option value="">Elige una organización…</option>
-            {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          <StyledSelect value={orgId} onChange={setOrgId} ariaLabel="Organización de esta corrida"
+            options={[{ value: "", label: "Elige una organización…" }, ...orgs.map((o) => ({ value: String(o.id), label: o.name }))]} />
           {orgs.length === 0 && <p className="mt-1 text-xs text-amber-400">No hay organizaciones. Crea una en Usuarios.</p>}
         </div>
       )}
@@ -141,15 +139,10 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
           ) : (
             <div className="mb-4 max-w-md">
               <label className="mb-1 block text-xs font-medium text-[var(--mut)]">Gaceta ya cargada</label>
-              <select value={gazetteId} onChange={(e) => setGazetteId(e.target.value)}
-                className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2 text-sm outline-none focus:border-[var(--acc)]">
-                <option value="">Elige una gaceta…</option>
-                {gazettes.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.country}{g.number} · {g.pub_count.toLocaleString()} publicaciones{g.date_public ? ` · ${g.date_public}` : ""}
-                  </option>
-                ))}
-              </select>
+              <StyledSelect value={gazetteId} onChange={setGazetteId} ariaLabel="Gaceta ya cargada"
+                options={[{ value: "", label: "Elige una gaceta…" }, ...gazettes.map((g) => ({
+                  value: String(g.id), label: `${g.country}${g.number} · ${g.pub_count.toLocaleString()} publicaciones${g.date_public ? ` · ${g.date_public}` : ""}`,
+                }))]} />
               <p className="mt-1.5 text-xs text-[var(--mut)]">
                 {gazettes.length === 0
                   ? "No hay gacetas pendientes. Aparecen las de países habilitados en Países, con publicaciones y que esta organización aún no comparó."

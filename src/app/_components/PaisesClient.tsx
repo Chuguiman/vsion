@@ -5,6 +5,7 @@ import { Search, Plus, X, SlidersHorizontal, ChevronDown, Loader2 } from "lucide
 import { setMonitoredAction, listCountriesAction } from "../paises-actions";
 import ScopePanel from "./ScopePanel";
 import type { CountryRow } from "@/lib/countries";
+import StyledSelect from "./StyledSelect";
 
 export default function PaisesClient({ countries, orgs = [], isSuper = false }: {
   countries: CountryRow[];
@@ -50,11 +51,8 @@ export default function PaisesClient({ countries, orgs = [], isSuper = false }: 
       {isSuper && (
         <div className="mb-6 max-w-md">
           <label className="mb-1 block text-xs font-medium text-[var(--mut)]">Organización</label>
-          <select value={orgId} onChange={(e) => setOrgId(e.target.value)}
-            className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] px-3 py-2 text-sm outline-none focus:border-[var(--acc)]">
-            <option value="">Elige una organización…</option>
-            {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-          </select>
+          <StyledSelect value={orgId} onChange={setOrgId} ariaLabel="Organización"
+            options={[{ value: "", label: "Elige una organización…" }, ...orgs.map((o) => ({ value: String(o.id), label: o.name }))]} />
           {orgs.length === 0 && <p className="mt-1 text-xs text-amber-400">No hay organizaciones. Crea una en Usuarios.</p>}
         </div>
       )}
