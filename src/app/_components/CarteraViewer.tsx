@@ -121,7 +121,7 @@ export default function CarteraViewer({ orgs = [], isSuper = false }: {
                   </div>
                   {m.holder && <div className="truncate text-[11px] text-blue-300">{m.holder}</div>}
                   {m.classes.length > 0 && <div className="mt-1"><ClassChips classes={m.classes} pys={m.pys} /></div>}
-                  <div className="mt-2 text-[11px] font-medium text-[var(--acc)] opacity-0 transition group-hover:opacity-100 group-focus:opacity-100">Ver detalle →</div>
+                  <div className="mt-2 text-[11px] font-medium text-[var(--acc)] opacity-70 transition group-hover:opacity-100 group-focus:opacity-100">Ver detalle →</div>
                 </div>
               </div>
             ))}
