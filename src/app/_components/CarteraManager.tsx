@@ -36,8 +36,7 @@ export default function CarteraManager({ orgs }: { orgs: { id: number; name: str
     if (!file || !orgId) return;
     setBusy(true); setMsg(null);
     try {
-      const text = await file.text();
-      const r = await importCarteraAction(text, Number(orgId));
+      const r = await importCarteraAction(file, Number(orgId));
       if (r.ok) {
         setInfo({ count: r.count ?? 0, updatedAt: new Date().toISOString() });
         setMsg({ ok: true, text: `Cartera importada: ${r.count?.toLocaleString()} marcas.` });

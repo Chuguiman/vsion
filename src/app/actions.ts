@@ -86,16 +86,20 @@ async function resolveRunOrg(organizationId: number | null): Promise<number | nu
   return organizationId;
 }
 
+// Los archivos llegan como Blob (no como string): React limita a ~1M los
+// caracteres de los argumentos serializados ("Maximum array nesting exceeded"),
+// y las gacetas/cartera pasan de ese tamaño. Los Blob viajan aparte en el FormData.
+
 /** Compara subiendo AMBOS archivos (cartera + gaceta). Funciona sin BD. */
-export async function runComparison(clientText: string, gazetteText: string, organizationId: number | null = null): Promise<RunResult> {
+export async function runComparison(clientFile: Blob, gazetteFile: Blob, organizationId: number | null = null): Promise<RunResult> {
   const denied = await requireUploader(); if (denied) return denied;
   const org = await resolveRunOrg(organizationId);
   if (org && typeof org === "object") return org;
   const t0 = Date.now();
   let clientRows: any, gazetteDoc: any;
   try {
-    clientRows = JSON.parse(clientText);
-    gazetteDoc = JSON.parse(gazetteText);
+    clientRows = JSON.parse(await clientFile.text());
+    gazetteDoc = JSON.parse(await gazetteFile.text());
   } catch {
     return { ok: false, error: "Alguno de los archivos no es JSON válido." };
   }
@@ -105,7 +109,7 @@ export async function runComparison(clientText: string, gazetteText: string, org
 }
 
 /** Compara usando la cartera ya importada en la BD; solo se sube la gaceta. */
-export async function runComparisonFromDb(gazetteText: string, organizationId: number | null = null): Promise<RunResult> {
+export async function runComparisonFromDb(gazetteFile: Blob, organizationId: number | null = null): Promise<RunResult> {
   const denied = await requireUploader(); if (denied) return denied;
   const org = await resolveRunOrg(organizationId);
   if (org && typeof org === "object") return org;
@@ -113,7 +117,7 @@ export async function runComparisonFromDb(gazetteText: string, organizationId: n
   const t0 = Date.now();
   let gazetteDoc: any;
   try {
-    gazetteDoc = JSON.parse(gazetteText);
+    gazetteDoc = JSON.parse(await gazetteFile.text());
   } catch {
     return { ok: false, error: "La gaceta no es JSON válido." };
   }
@@ -179,7 +183,7 @@ export async function runComparisonFromGazetteAction(gazetteId: number, organiza
 
 /** Importa/reemplaza la cartera de una organización. Acepta casos.json (arreglo)
  *  o el formato gaceta ({ details: [...] }, p.ej. ccb.json). */
-export async function importCarteraAction(clientText: string, organizationId: number | null = null): Promise<{ ok: boolean; count?: number; error?: string }> {
+export async function importCarteraAction(clientFile: Blob, organizationId: number | null = null): Promise<{ ok: boolean; count?: number; error?: string }> {
   const s = await getSession();
   if (s?.role !== "superadmin") return { ok: false, error: "No autorizado." };
   if (organizationId == null) return { ok: false, error: "Elige una organización." };
@@ -190,7 +194,7 @@ export async function importCarteraAction(clientText: string, organizationId: nu
   }
   let doc: any;
   try {
-    doc = JSON.parse(clientText);
+    doc = JSON.parse(await clientFile.text());
   } catch {
     return { ok: false, error: "El archivo no es JSON válido." };
   }

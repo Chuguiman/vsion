@@ -75,10 +75,10 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
         r = await runComparisonFromGazetteAction(Number(gazetteId), oid);
       } else if (hasCartera) {
         if (!gazette) return;
-        r = await runComparisonFromDb(await gazette.text(), oid);
+        r = await runComparisonFromDb(gazette, oid);
       } else {
         if (!gazette || !client) return;
-        r = await runComparison(await client.text(), await gazette.text(), oid);
+        r = await runComparison(client, gazette, oid);
       }
       // Guardó en historial → ir a la vista de resultados dedicada.
       if (r.ok && r.runId) { router.push(`/runs/${r.runId}`); return; }
