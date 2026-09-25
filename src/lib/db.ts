@@ -53,3 +53,22 @@ export async function withDbTimeout<T>(op: () => Promise<T>, ms = 8000): Promise
     if (timer) clearTimeout(timer);
   }
 }
+
+const CONN_ERRORS = new Set(["ECONNRESET", "EPIPE", "ETIMEDOUT", "CONNECTION_CLOSED", "CONNECTION_ENDED", "CONNECTION_DESTROYED"]);
+
+/**
+ * Reintenta una vez si falla por conexión caída (p.ej. "read ECONNRESET": el
+ * pooler de Supabase cerró el socket cacheado). Descarta la conexión y el
+ * segundo intento reconecta. `op` debe llamar a getDb() dentro, no capturarla.
+ */
+export async function withDbRetry<T>(op: () => Promise<T>): Promise<T> {
+  try {
+    return await op();
+  } catch (e) {
+    const code = (e as { code?: string })?.code;
+    if (!code || !CONN_ERRORS.has(code)) throw e;
+    console.warn(`[vsion] conexión BD caída (${code}); reconectando y reintentando`);
+    resetDb();
+    return op();
+  }
+}

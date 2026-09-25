@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { getDb, withDbRetry } from "./db";
 import { SYSTEM_PROMPT } from "@/ai-review";
 import type { ReportDTO, CandDTO, PubDTO, AiResult, AiVerdict } from "./dto";
 
@@ -60,13 +60,12 @@ export interface BatchResult { ok: boolean; error?: string; analyzed: number; to
 
 /** Analiza un lote de conflictos sin veredicto y persiste en el payload. */
 export async function analyzeRunBatch(runId: number, batchSize = 15): Promise<BatchResult> {
-  const db = getDb();
-  if (!db) return { ok: false, error: "Sin base de datos.", analyzed: 0, total: 0, remaining: 0 };
+  if (!getDb()) return { ok: false, error: "Sin base de datos.", analyzed: 0, total: 0, remaining: 0 };
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return { ok: false, error: "Falta OPENROUTER_API_KEY en el entorno.", analyzed: 0, total: 0, remaining: 0 };
   const model = process.env.AI_MODEL ?? "deepseek/deepseek-chat";
 
-  const [row] = await db<{ payload: ReportDTO }[]>`SELECT payload FROM runs WHERE id = ${runId}`;
+  const [row] = await withDbRetry(() => getDb()!<{ payload: ReportDTO }[]>`SELECT payload FROM runs WHERE id = ${runId}`);
   if (!row) return { ok: false, error: "Corrida no encontrada.", analyzed: 0, total: 0, remaining: 0 };
   const dto = row.payload;
   const jur = JURISDICTION[dto.meta.country] ?? dto.meta.country;
@@ -112,10 +111,14 @@ export async function analyzeRunBatch(runId: number, batchSize = 15): Promise<Ba
   const analyzedTotal = conflicts.filter((x) => x.cand.ai).length;
   const nOpp = conflicts.filter((x) => x.cand.ai?.recommendation === "file_opposition").length;
   const nMon = conflicts.filter((x) => x.cand.ai?.recommendation === "monitor_closely").length;
-  await db`
-    UPDATE runs SET payload = ${db.json(dto as any)}, ai_ran = true, n_opposition = ${nOpp}, n_monitor = ${nMon}
-    WHERE id = ${runId}
-  `;
+  // Tras ~10-20 s de llamadas a la IA el socket pudo quedar muerto → reintento.
+  await withDbRetry(() => {
+    const db = getDb()!;
+    return db`
+      UPDATE runs SET payload = ${db.json(dto as any)}, ai_ran = true, n_opposition = ${nOpp}, n_monitor = ${nMon}
+      WHERE id = ${runId}
+    `;
+  });
 
   return { ok: true, analyzed: analyzedTotal, total, remaining: total - analyzedTotal };
 }
