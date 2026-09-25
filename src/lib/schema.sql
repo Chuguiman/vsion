@@ -111,6 +111,12 @@ alter table client_marks add column if not exists organization_id bigint;
 -- Tipo de marca (Mixta / Nominativa / Figurativa / Tridimensional / Animada…).
 -- Permite conservar y mostrar las figurativas/3D/animadas (sin denominación).
 alter table client_marks add column if not exists mark_type text;
+-- Datos del registro para el visor de cartera (vacíos si la fuente no los trae).
+alter table client_marks add column if not exists filing_country text;  -- país de radicación
+alter table client_marks add column if not exists category text;        -- Marca / Lema / …
+alter table client_marks add column if not exists cert_number text;     -- n.º de certificado
+alter table client_marks add column if not exists pub_number text;      -- n.º de publicación / gaceta
+alter table client_marks add column if not exists pub_date text;        -- fecha de publicación
 create index if not exists client_marks_denom_idx on client_marks (denom);
 create index if not exists client_marks_org_idx on client_marks (organization_id);
 

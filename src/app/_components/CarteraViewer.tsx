@@ -1,39 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Search, Loader2, ArrowLeft, ChevronDown, Check } from "lucide-react";
-import { getMarkMatchesAction, listCarteraMarksAction, type MarkMatch } from "../actions";
-import type { CarteraMarksPage } from "@/lib/cartera";
+import { useEffect, useState } from "react";
+import { ChevronDown, Check } from "lucide-react";
+import { getMarkMatchesAction, type MarkMatch } from "../actions";
+import type { CarteraMark } from "@/lib/cartera";
 import ZoomImage from "./ZoomImage";
-import ClassChips from "./ClassChips";
+import CarteraTable, { fmtDate as formatDate } from "./CarteraTable";
 
 export default function CarteraViewer({ orgs = [], isSuper = false }: {
   orgs?: { id: number; name: string }[];
   isSuper?: boolean;
 }) {
   const [orgId, setOrgId] = useState<string>(isSuper ? (orgs.length === 1 ? String(orgs[0].id) : "") : "self");
-  const [q, setQ] = useState("");
-  const [onlyImages, setOnlyImages] = useState(false);
-  const [page, setPage] = useState(1);
-  const [data, setData] = useState<CarteraMarksPage | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [selectedMark, setSelectedMark] = useState<CarteraMarksPage["rows"][number] | null>(null);
+  const [selectedMark, setSelectedMark] = useState<CarteraMark | null>(null);
   const [orgMenuOpen, setOrgMenuOpen] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const needsOrg = isSuper && !orgId;
   const selectedOrgName = orgs.find((o) => String(o.id) === orgId)?.name ?? "Elige una organización…";
-
-  useEffect(() => {
-    if (needsOrg) { setData(null); return; }
-    let alive = true;
-    setLoading(true);
-    const org = isSuper ? Number(orgId) : null;
-    listCarteraMarksAction(org, { q, page, onlyImages })
-      .then((r) => { if (alive) setData(r.page ?? null); })
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, [orgId, q, page, onlyImages, isSuper, needsOrg]);
 
   useEffect(() => {
     if (!orgMenuOpen) return;
@@ -42,22 +25,13 @@ export default function CarteraViewer({ orgs = [], isSuper = false }: {
     return () => document.removeEventListener("click", close);
   }, [orgMenuOpen]);
 
-  function onSearch(v: string) {
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => { setPage(1); setQ(v); }, 300);
-  }
-
-  function closeDetail() {
-    setSelectedMark(null);
-  }
-
-  if (selectedMark) return <MarkDetail mark={selectedMark} onBack={closeDetail} />;
-
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      {selectedMark && <MarkDetail mark={selectedMark} onBack={() => setSelectedMark(null)} />}
+      {/* La tabla sigue montada al abrir el detalle: conserva búsqueda, filtros y página. */}
+      <div hidden={!!selectedMark}>
         {isSuper && (
-          <div className="w-full max-w-xs">
+          <div className="mb-4 w-full max-w-xs">
             <label className="mb-1 block text-xs font-medium text-[var(--mut)]">Organización</label>
             <div className="relative" onClick={(e) => e.stopPropagation()}>
               <button type="button" aria-haspopup="listbox" aria-expanded={orgMenuOpen}
@@ -68,79 +42,20 @@ export default function CarteraViewer({ orgs = [], isSuper = false }: {
               </button>
               {orgMenuOpen && (
                 <div role="listbox" aria-label="Organización" className="absolute left-0 right-0 z-30 mt-1 overflow-hidden rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-1 shadow-xl shadow-black/30">
-                  <OrgOption label="Elige una organización…" value="" selected={orgId === ""} onSelect={() => { setPage(1); setOrgId(""); setOrgMenuOpen(false); }} />
-                  {orgs.map((o) => <OrgOption key={o.id} label={o.name} value={String(o.id)} selected={orgId === String(o.id)} onSelect={() => { setPage(1); setOrgId(String(o.id)); setOrgMenuOpen(false); }} />)}
+                  <OrgOption label="Elige una organización…" value="" selected={orgId === ""} onSelect={() => { setOrgId(""); setOrgMenuOpen(false); }} />
+                  {orgs.map((o) => <OrgOption key={o.id} label={o.name} value={String(o.id)} selected={orgId === String(o.id)} onSelect={() => { setOrgId(String(o.id)); setOrgMenuOpen(false); }} />)}
                 </div>
               )}
             </div>
           </div>
         )}
-        <div className="relative min-w-[16rem] flex-1">
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[var(--mut)]" />
-          <input defaultValue={q} onChange={(e) => onSearch(e.target.value)} placeholder="Buscar por marca, código, expediente o titular"
-            className="w-full rounded-lg border border-[var(--bd)] bg-[var(--bg2)] py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--acc)]" />
-        </div>
-        {(data?.withImages ?? 0) > 0 && (
-          <label className="inline-flex items-center gap-2 text-sm text-[var(--mut)]">
-            <input type="checkbox" checked={onlyImages} onChange={(e) => { setPage(1); setOnlyImages(e.target.checked); }} />
-            Solo con imagen
-          </label>
+
+        {needsOrg ? (
+          <p className="rounded-xl border border-dashed border-[var(--bd)] px-4 py-8 text-center text-sm text-[var(--mut)]">Elige una organización para ver su cartera.</p>
+        ) : (
+          <CarteraTable key={orgId} orgId={isSuper ? Number(orgId) : null} onOpen={setSelectedMark} />
         )}
       </div>
-
-      {data && (
-        <p className="mb-3 text-xs text-[var(--mut)]">
-          {data.total.toLocaleString()} marcas{q ? " (filtradas)" : ""}
-          {data.withImages > 0 ? ` · ${data.withImages.toLocaleString()} con imagen en cartera` : ""}
-        </p>
-      )}
-
-      {needsOrg ? (
-        <p className="rounded-xl border border-dashed border-[var(--bd)] px-4 py-8 text-center text-sm text-[var(--mut)]">Elige una organización para ver su cartera.</p>
-      ) : loading && !data ? (
-        <div className="flex items-center gap-2 px-1 py-8 text-sm text-[var(--mut)]"><Loader2 size={15} className="animate-spin" /> Cargando…</div>
-      ) : data && data.rows.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-[var(--bd)] px-4 py-8 text-center text-sm text-[var(--mut)]">Sin marcas para el filtro.</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {data?.rows.map((m) => (
-              <div key={m.id} role="button" tabIndex={0}
-                onClick={() => setSelectedMark(m)}
-                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedMark(m); } }}
-                className="group flex cursor-pointer gap-3 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-3 transition hover:border-[var(--acc)] hover:shadow-lg hover:shadow-black/10 focus:outline-none focus:ring-2 focus:ring-[var(--acc)]">
-                {m.imageUrl && (
-                  <span className="shrink-0" onClick={(e) => e.stopPropagation()}><ZoomImage src={m.imageUrl} alt={m.denom} size={56} /></span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className={`truncate font-semibold ${m.denom ? "" : "italic text-[var(--mut)]"}`}>{m.denom || `(${m.markType || "figurativa"})`}</div>
-                  <div className="font-mono text-[11px] text-[var(--mut)]">
-                    {m.code || m.caseId || "—"}
-                    {m.markType ? ` · ${m.markType}` : ""}
-                    {m.status ? ` · ${m.status}` : ""}
-                  </div>
-                  {m.holder && <div className="truncate text-[11px] text-blue-300">{m.holder}</div>}
-                  {m.classes.length > 0 && <div className="mt-1"><ClassChips classes={m.classes} pys={m.pys} /></div>}
-                  <div className="mt-2 text-[11px] font-medium text-[var(--acc)] opacity-70 transition group-hover:opacity-100 group-focus:opacity-100">Ver detalle →</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {data && data.pages > 1 && (
-            <div className="mt-4 flex items-center justify-between text-sm text-[var(--mut)]">
-              <span>Página {data.page} de {data.pages}</span>
-              <div className="flex items-center gap-2">
-                <button disabled={data.page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="rounded-lg border border-[var(--bd)] px-3 py-1.5 disabled:opacity-40 hover:text-[var(--tx)]">← Anterior</button>
-                <button disabled={data.page >= data.pages || loading} onClick={() => setPage((p) => p + 1)}
-                  className="rounded-lg border border-[var(--bd)] px-3 py-1.5 disabled:opacity-40 hover:text-[var(--tx)]">Siguiente →</button>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
     </div>
   );
 }
@@ -156,13 +71,8 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   return <div className="border-b border-[var(--bd)] py-3 last:border-0"><div className="text-[11px] text-[var(--mut)]">{label}</div><div className="mt-1 text-sm font-medium">{value}</div></div>;
 }
 
-type MarkDetailProps = { mark: CarteraMarksPage["rows"][number]; onBack: () => void };
+type MarkDetailProps = { mark: CarteraMark; onBack: () => void };
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("es-CO", { day: "2-digit", month: "short", year: "numeric" }).format(date);
-}
 
 function matchScoreColor(score: number) {
   const t = Math.max(0, Math.min(1, (score - 55) / 45));
@@ -220,12 +130,12 @@ function MarkDetail({ mark, onBack }: MarkDetailProps) {
     <div className="max-w-6xl">
       <div className="mb-5 flex items-center gap-2 text-xs text-[var(--mut)]">
         <button type="button" onClick={onBack} className="hover:text-[var(--tx)]">Marcas</button>
-        <span>/</span><span>{mark.country || "Registro"}</span><span>/</span><strong className="font-medium text-[var(--tx)]">{mark.code || title}</strong>
+        <span>/</span><span>{mark.filingCountry || "Registro"}</span><span>/</span><strong className="font-medium text-[var(--tx)]">{mark.code || title}</strong>
       </div>
 
       <div className="mb-6 flex flex-col justify-between gap-5 md:flex-row md:items-start">
         <div className="min-w-0">
-          <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[var(--mut)]">Expediente de marca · {mark.country || "País no informado"}</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[.16em] text-[var(--mut)]">Expediente de marca · {mark.filingCountry || "País no informado"}</div>
           <h1 className="mt-2 break-words text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h1>
           <div className="mt-3 flex flex-wrap gap-2">
             {mark.status && <span className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-400">● {mark.status}</span>}
@@ -264,7 +174,7 @@ function MarkDetail({ mark, onBack }: MarkDetailProps) {
               </div>
               <div className="mt-6 flex items-start gap-3 border-t border-[var(--bd)] pt-4"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-emerald-500/15 text-emerald-400">↗</span><div><b className="block text-xs">Registro en cartera</b><small className="mt-1 block text-[11px] text-[var(--mut)]">La fuente no informa fechas de vigencia ni resolución.</small></div></div>
             </article>
-            <article className="rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-5 sm:p-6"><h2 className="mb-4 text-sm font-semibold">Datos del registro</h2><div className="grid gap-x-8 sm:grid-cols-2"><DetailRow label="Número de solicitud / expediente" value={mark.code || "Sin dato"} /><DetailRow label="Referencia SIC" value={mark.caseId || "Sin dato"} /><DetailRow label="Denominación" value={title} /><DetailRow label="Tipo de signo" value={mark.markType || "Sin dato"} /><DetailRow label="Clasificación" value={mark.classes.length ? `Niza ${mark.classes.join(", ")}` : "Sin dato"} /><DetailRow label="Estado" value={mark.status || "Sin dato"} /></div></article>
+            <article className="rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-5 sm:p-6"><h2 className="mb-4 text-sm font-semibold">Datos del registro</h2><div className="grid gap-x-8 sm:grid-cols-2"><DetailRow label="Número de solicitud / expediente" value={mark.code || "Sin dato"} /><DetailRow label="Referencia SIC" value={mark.caseId || "Sin dato"} /><DetailRow label="Denominación" value={title} /><DetailRow label="Tipo de signo" value={mark.markType || "Sin dato"} /><DetailRow label="Clasificación" value={mark.classes.length ? `Niza ${mark.classes.join(", ")}` : "Sin dato"} /><DetailRow label="Estado" value={mark.status || "Sin dato"} /><DetailRow label="Categoría" value={mark.category || "Sin dato"} /><DetailRow label="País de radicación" value={mark.filingCountry || "Sin dato"} /><DetailRow label="N.º de certificado" value={mark.certNumber || "Sin dato"} /><DetailRow label="Publicación" value={[mark.pubNumber && `N.º ${mark.pubNumber}`, mark.pubDate && formatDate(mark.pubDate)].filter(Boolean).join(" · ") || "Sin dato"} /></div></article>
             <article className="rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-5 sm:p-6"><h2 className="mb-4 text-sm font-semibold">Derechos y cobertura</h2>{mark.classes.length ? mark.classes.map((n) => <div key={n} className="mb-4 flex gap-3 last:mb-0"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--acc)] text-sm font-semibold text-[var(--bg)]">{n}</span><div><h3 className="text-xs font-semibold">Clase {n}</h3><p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-[var(--mut)]">{mark.pys || "La descripción de productos y servicios no está disponible en el registro."}</p></div></div>) : <p className="text-xs text-[var(--mut)]">No hay clases Niza informadas.</p>}</article>
           </div>
           <aside className="space-y-5">

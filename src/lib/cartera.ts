@@ -24,9 +24,11 @@ export async function importCartera(marks: ClientMark[], orgId: number | null): 
       case_id: m.id, code: m.code, denom: m.denom, mark_type: m.markType, classes: m.classes,
       pys: m.pys, holder: m.holder, attorney: m.attorney, status: m.status,
       country: m.country, filed_date: m.filedDate, valid_until: m.validUntil, register_date: m.registerDate,
+      filing_country: m.filingCountry ?? null, category: m.category ?? null, cert_number: m.certNumber ?? null,
+      pub_number: m.pubNumber ?? null, pub_date: m.pubDate ?? null,
       organization_id: orgId,
     }));
-    await db`INSERT INTO client_marks ${db(batch, "case_id", "code", "denom", "mark_type", "classes", "pys", "holder", "attorney", "status", "country", "filed_date", "valid_until", "register_date", "organization_id")}`;
+    await db`INSERT INTO client_marks ${db(batch, "case_id", "code", "denom", "mark_type", "classes", "pys", "holder", "attorney", "status", "country", "filed_date", "valid_until", "register_date", "filing_country", "category", "cert_number", "pub_number", "pub_date", "organization_id")}`;
   }
   return marks.length;
 }
@@ -35,33 +37,66 @@ export interface CarteraMark {
   id: number; denom: string; code: string; caseId: string; markType: string; classes: number[];
   pys: string; holder: string; attorney: string; status: string; country: string;
   filedDate: string; validUntil: string; registerDate: string; imageUrl: string | null;
+  filingCountry: string; category: string; certNumber: string; pubNumber: string; pubDate: string;
 }
+export interface CarteraFacet { value: string; count: number }
 export interface CarteraMarksPage {
   rows: CarteraMark[]; total: number; page: number; pageSize: number; pages: number; withImages: number;
+  /** Valores disponibles en toda la cartera de la org (para los filtros). */
+  facets?: { statuses: CarteraFacet[]; countries: CarteraFacet[]; filingCountries: CarteraFacet[]; classes: CarteraFacet[] };
+}
+
+export type CarteraSort = "denom" | "code" | "caseId" | "holder" | "attorney" | "status" | "country" | "filingCountry"
+  | "category" | "markType" | "filed" | "valid" | "pub";
+export interface CarteraListOpts {
+  q?: string; page?: number; pageSize?: number; onlyImages?: boolean;
+  statuses?: string[]; countries?: string[]; filingCountries?: string[]; classNums?: number[];
+  sort?: CarteraSort; dir?: "asc" | "desc";
+}
+
+/** Fecha en texto (AAAA-MM-DD o D/M/AAAA, como llega de la fuente) → date ordenable; otra cosa → null. */
+function sortableDate(db: NonNullable<ReturnType<typeof getDb>>, col: ReturnType<NonNullable<ReturnType<typeof getDb>>>) {
+  return db`CASE WHEN ${col} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN substr(${col}, 1, 10)::date
+                 WHEN ${col} ~ '^[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}$' THEN to_date(${col}, 'DD/MM/YYYY') END`;
 }
 
 /** Marcas de la cartera de una org (paginadas, con imagen si existe). Para el visor. */
-export async function listCarteraMarks(
-  orgId: number | null,
-  opts: { q?: string; page?: number; pageSize?: number; onlyImages?: boolean } = {}
-): Promise<CarteraMarksPage> {
+export async function listCarteraMarks(orgId: number | null, opts: CarteraListOpts = {}): Promise<CarteraMarksPage> {
   const db = getDb();
-  const pageSize = Math.min(Math.max(opts.pageSize ?? 48, 12), 120);
+  const pageSize = Math.min(Math.max(opts.pageSize ?? 25, 10), 120);
   const page = Math.max(opts.page ?? 1, 1);
   const offset = (page - 1) * pageSize;
   const empty: CarteraMarksPage = { rows: [], total: 0, page, pageSize, pages: 0, withImages: 0 };
   if (!db || orgId == null) return empty;
 
   const q = (opts.q ?? "").trim();
-  const qFilter = q
-    ? db`AND (cm.denom ILIKE ${"%" + q + "%"} OR cm.code ILIKE ${"%" + q + "%"} OR cm.case_id ILIKE ${"%" + q + "%"} OR cm.holder ILIKE ${"%" + q + "%"})`
-    : db``;
-  const imgFilter = opts.onlyImages ? db`AND ci.path IS NOT NULL` : db``;
+  const like = "%" + q + "%";
+  const filters = [
+    q ? db`AND (cm.denom ILIKE ${like} OR cm.code ILIKE ${like} OR cm.case_id ILIKE ${like} OR cm.holder ILIKE ${like} OR cm.attorney ILIKE ${like})` : db``,
+    opts.onlyImages ? db`AND ci.path IS NOT NULL` : db``,
+    opts.statuses?.length ? db`AND coalesce(nullif(cm.status, ''), '—') = ANY(${opts.statuses})` : db``,
+    opts.countries?.length ? db`AND coalesce(nullif(cm.country, ''), '—') = ANY(${opts.countries})` : db``,
+    opts.classNums?.length ? db`AND cm.classes && ${opts.classNums}::int[]` : db``,
+    opts.filingCountries?.length ? db`AND coalesce(nullif(cm.filing_country, ''), '—') = ANY(${opts.filingCountries})` : db``,
+  ];
+  const where = db`cm.organization_id = ${orgId} ${filters[0]} ${filters[1]} ${filters[2]} ${filters[3]} ${filters[4]} ${filters[5]}`;
+
+  // Columnas ordenables (lista blanca). Vacías al final.
+  const sortCol = {
+    denom: db`lower(cm.denom)`, code: db`nullif(cm.code, '')`, caseId: db`nullif(cm.case_id, '')`,
+    holder: db`nullif(lower(cm.holder), '')`, attorney: db`nullif(lower(cm.attorney), '')`,
+    status: db`nullif(cm.status, '')`, country: db`nullif(cm.country, '')`, filingCountry: db`nullif(cm.filing_country, '')`,
+    category: db`nullif(cm.category, '')`, markType: db`nullif(cm.mark_type, '')`, pub: sortableDate(db, db`cm.pub_date`),
+    filed: sortableDate(db, db`cm.filed_date`), valid: sortableDate(db, db`cm.valid_until`),
+  }[opts.sort ?? "denom"] ?? db`lower(cm.denom)`;
+  const order = opts.sort
+    ? db`${sortCol} ${opts.dir === "desc" ? db`DESC` : db`ASC`} NULLS LAST, cm.id`
+    : db`(ci.path IS NULL), lower(cm.denom), cm.id`;
 
   const [{ n }] = await db<{ n: number }[]>`
     SELECT count(*)::int AS n FROM client_marks cm
     LEFT JOIN cartera_images ci ON ci.organization_id = cm.organization_id AND ci.code = cm.code
-    WHERE cm.organization_id = ${orgId} ${qFilter} ${imgFilter}`;
+    WHERE ${where}`;
   const [{ w }] = await db<{ w: number }[]>`
     SELECT count(*)::int AS w FROM client_marks cm
     JOIN cartera_images ci ON ci.organization_id = cm.organization_id AND ci.code = cm.code
@@ -70,22 +105,47 @@ export async function listCarteraMarks(
     id: number; denom: string; code: string | null; case_id: string | null; mark_type: string | null; classes: number[] | null;
     pys: string | null; holder: string | null; attorney: string | null; status: string | null; country: string | null;
     filed_date: string | null; valid_until: string | null; register_date: string | null; bucket: string | null; path: string | null;
+    filing_country: string | null; category: string | null; cert_number: string | null; pub_number: string | null; pub_date: string | null;
   }[]>`
     SELECT cm.id, cm.denom, cm.code, cm.case_id, cm.mark_type, cm.classes, cm.pys, cm.holder, cm.attorney, cm.status, cm.country,
-           cm.filed_date, cm.valid_until, cm.register_date, ci.bucket, ci.path
+           cm.filed_date, cm.valid_until, cm.register_date, ci.bucket, ci.path,
+           cm.filing_country, cm.category, cm.cert_number, cm.pub_number, cm.pub_date
     FROM client_marks cm
     LEFT JOIN cartera_images ci ON ci.organization_id = cm.organization_id AND ci.code = cm.code
-    WHERE cm.organization_id = ${orgId} ${qFilter} ${imgFilter}
-    ORDER BY (ci.path IS NULL), cm.denom
+    WHERE ${where}
+    ORDER BY ${order}
     LIMIT ${pageSize} OFFSET ${offset}`;
+
+  const facetRows = await db<{ kind: string; value: string; count: number }[]>`
+    SELECT 's' AS kind, coalesce(nullif(status, ''), '—') AS value, count(*)::int AS count
+      FROM client_marks WHERE organization_id = ${orgId} GROUP BY 2
+    UNION ALL
+    SELECT 'c', coalesce(nullif(country, ''), '—'), count(*)::int
+      FROM client_marks WHERE organization_id = ${orgId} GROUP BY 2
+    UNION ALL
+    SELECT 'f', coalesce(nullif(filing_country, ''), '—'), count(*)::int
+      FROM client_marks WHERE organization_id = ${orgId} GROUP BY 2
+    UNION ALL
+    SELECT 'n', k::text, count(*)::int
+      FROM client_marks, unnest(classes) AS k WHERE organization_id = ${orgId} GROUP BY 2`;
+  const facet = (kind: string) => facetRows.filter((f) => f.kind === kind).map(({ value, count }) => ({ value, count }));
+
   return {
     rows: rows.map((r) => ({
       id: r.id, denom: r.denom, code: r.code ?? "", caseId: r.case_id ?? "", markType: r.mark_type ?? "", classes: r.classes ?? [],
       pys: r.pys ?? "", holder: r.holder ?? "", attorney: r.attorney ?? "", status: r.status ?? "", country: r.country ?? "",
       filedDate: r.filed_date ?? "", validUntil: r.valid_until ?? "", registerDate: r.register_date ?? "",
       imageUrl: publicImageUrl(r.bucket, r.path),
+      filingCountry: r.filing_country ?? "", category: r.category ?? "", certNumber: r.cert_number ?? "",
+      pubNumber: r.pub_number ?? "", pubDate: r.pub_date ?? "",
     })),
     total: n, page, pageSize, pages: Math.max(1, Math.ceil(n / pageSize)), withImages: w,
+    facets: {
+      statuses: facet("s").sort((a, b) => b.count - a.count),
+      countries: facet("c").sort((a, b) => b.count - a.count),
+      filingCountries: facet("f").sort((a, b) => b.count - a.count),
+      classes: facet("n").sort((a, b) => Number(a.value) - Number(b.value)),
+    },
   };
 }
 

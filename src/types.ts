@@ -15,6 +15,11 @@ export interface ClientMark {
   filedDate: string;      // fecha_de_radicacion
   validUntil: string;     // vigencia
   registerDate: string;   // fecha_de_registro
+  filingCountry?: string; // país de radicación (oficina donde se presentó)
+  category?: string;      // Marca / Lema / Enseña / Nombre comercial…
+  certNumber?: string;    // número de certificado de registro
+  pubNumber?: string;     // número de publicación / gaceta
+  pubDate?: string;       // fecha_de_la_publicacion
   keys: PhoneticKeys;
 }
 

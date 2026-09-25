@@ -39,6 +39,12 @@ export function parseClientMarks(rows: any[]): ClientMark[] {
       filedDate: String(r.fecha_de_radicacion ?? "").trim(),
       validUntil: String(r.vigencia ?? "").trim(),
       registerDate: String(r.fecha_de_registro ?? "").trim(),
+      // casos.json es la exportación del SIPI (SIC): se radicó en Colombia.
+      filingCountry: String(r.pais_de_radicacion ?? r.pais_radicado ?? "CO").trim().toUpperCase(),
+      category: String(r.categoria ?? r.categoria_de_marca ?? "").trim(),
+      certNumber: String(r.numero_de_certificado ?? r.certificado ?? "").trim(),
+      pubNumber: String(r.numero_de_publicacion ?? r.gaceta ?? "").trim(),
+      pubDate: String(r.fecha_de_la_publicacion ?? "").trim(),
       keys: computeKeys(denom),
     });
   }
@@ -58,6 +64,7 @@ export function loadClientMarks(path: string): ClientMark[] {
  */
 export function parseClientMarksFromGazette(doc: any): ClientMark[] {
   const marks: ClientMark[] = [];
+  const pub = Array.isArray(doc?.publication) ? doc.publication[0] ?? {} : doc?.publication ?? {};
   for (const d of doc?.details ?? []) {
     const denom = String(d.word ?? "").trim();
     const id = String(d.applicationNumber ?? "").trim();
@@ -69,7 +76,8 @@ export function parseClientMarksFromGazette(doc: any): ClientMark[] {
       : "";
     const ap = Array.isArray(d.applicants) && d.applicants[0] ? d.applicants[0] : {};
     const rep = Array.isArray(d.representants) && d.representants[0] ? d.representants[0] : {};
-    const country = String(d.paisrad ?? ap.aplicantCountry ?? "").trim().toUpperCase();
+    const country = String(ap.aplicantCountry || d.paisrad || "").trim().toUpperCase();
+    const gac = Array.isArray(d.infoGacs) && d.infoGacs[0] ? d.infoGacs[0] : {};
     marks.push({
       id,
       code,
@@ -84,6 +92,11 @@ export function parseClientMarksFromGazette(doc: any): ClientMark[] {
       filedDate: String(d.applicationDate ?? "").trim(),
       validUntil: String(d.vigencia ?? "").trim(),
       registerDate: "",
+      filingCountry: String(d.paisrad ?? "").trim().toUpperCase(),
+      category: String(d.markCategory ?? "").trim(),
+      certNumber: String(d.certificado ?? d.registrationNumber ?? "").trim(),
+      pubNumber: String(gac.ngac ?? pub.number ?? "").trim(),
+      pubDate: String(gac.fechaPublicacion ?? pub.datePublic ?? "").trim(),
       keys: computeKeys(denom),
     });
   }
