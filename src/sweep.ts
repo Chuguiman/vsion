@@ -2,7 +2,7 @@
  * Etapa 1 — Barrido fonético/textual rapidísimo, en memoria, sin IA.
  * Índice invertido por trigramas + soundex para no comparar N×M completo.
  */
-import { jaroWinkler, levenshteinRatio, diceCoefficient, containment } from "./similarity";
+import { jaroWinkler, levenshteinRatio, diceCoefficient, wordContainment } from "./similarity";
 import { classOverlap } from "./classes";
 import { sameEntity } from "./owner";
 import type { ClientMark, GazetteEntry, Candidate } from "./types";
@@ -16,8 +16,44 @@ export interface SweepOptions {
 
 export const DEFAULT_SWEEP: SweepOptions = { threshold: 55, topN: 15, minSharedTrigrams: 2, minDenomLen: 3 };
 
-/** Score 0..100 entre una publicación y una marca del cliente */
-export function scorePair(g: GazetteEntry, c: ClientMark): { score: number; breakdown: Record<string, number> } {
+// Palabras vacías / genéricas que no cuentan como "palabra distintiva compartida".
+const STOPWORDS = new Set([
+  "de", "del", "la", "las", "el", "los", "y", "e", "o", "en", "con", "por", "para", "al", "un", "una",
+  "the", "of", "and", "for", "by", "to", "in", "on", "with",
+  "sas", "ltda", "group", "grupo", "company", "compania", "internacional", "international",
+  // laudatorias / genéricas frecuentes
+  "nuevo", "nueva", "mejor", "calidad", "siempre", "futuro", "premium", "plus", "colombia",
+]);
+const MIN_WORD_LEN = 4;
+// Una palabra es "rara" si aparece en ≤ RARE_WORD_MAX_DF publicaciones de la gaceta
+// y en ≤ max(RARE_CARTERA_MIN, RARE_CARTERA_RATIO × marcas) marcas de la cartera.
+const RARE_WORD_MAX_DF = 3;
+const RARE_CARTERA_MIN = 10;
+const RARE_CARTERA_RATIO = 0.002;
+// Score mínimo cuando comparten una palabra distintiva y una clase (≥ threshold para conservarlo).
+const SHARED_WORD_FLOOR = 0.60;
+
+function wordsOf(words: string): string[] {
+  return words.split(" ").filter((w) => w.length >= MIN_WORD_LEN && !STOPWORDS.has(w));
+}
+
+function docFreq(items: { keys: { words: string } }[]): Map<string, number> {
+  const df = new Map<string, number>();
+  for (const it of items) for (const w of new Set(wordsOf(it.keys.words))) df.set(w, (df.get(w) ?? 0) + 1);
+  return df;
+}
+
+/** Predicado "¿es rara?" según la frecuencia en la gaceta y en la cartera. */
+function rareWordPredicate(gazette: GazetteEntry[], marks: ClientMark[]): (w: string) => boolean {
+  const dfG = docFreq(gazette), dfC = docFreq(marks);
+  const maxC = Math.max(RARE_CARTERA_MIN, Math.floor(marks.length * RARE_CARTERA_RATIO));
+  return (w) => (dfG.get(w) ?? 0) <= RARE_WORD_MAX_DF && (dfC.get(w) ?? 0) <= maxC;
+}
+
+/** Score 0..100 entre una publicación y una marca del cliente.
+ *  @param isRare si se pasa (y comparten clase), una palabra distintiva y rara
+ *  compartida sube el score a SHARED_WORD_FLOOR. */
+export function scorePair(g: GazetteEntry, c: ClientMark, isRare?: (w: string) => boolean): { score: number; breakdown: Record<string, number> } {
   const gk = g.keys, ck = c.keys;
 
   const jw = jaroWinkler(gk.clean, ck.clean);
@@ -34,8 +70,17 @@ export function scorePair(g: GazetteEntry, c: ClientMark): { score: number; brea
   let base = 0.34 * jw + 0.22 * lev + 0.24 * dice + phon;
 
   // Contención (una marca dentro de la otra) — riesgo alto aunque difieran en longitud
-  const contained = containment(gk.clean, ck.clean);
+  const contained = wordContainment(gk.clean, gk.words, ck.clean, ck.words);
   if (contained) base = Math.max(base, 0.80);
+
+  // Palabra distintiva compartida (p.ej. MARATÓN en "MEDIA MARATÓN DEL MILAGROSO" vs
+  // "MARATÓN DE MEDELLIN"): el score global puede quedar bajo por la diferencia de largo.
+  let sharedWord = false;
+  if (isRare && g.classes.some((x) => c.classes.includes(x))) {
+    const cw = new Set(wordsOf(ck.words));
+    sharedWord = wordsOf(gk.words).some((w) => cw.has(w) && isRare(w));
+    if (sharedWord) base = Math.max(base, SHARED_WORD_FLOOR);
+  }
 
   const score = Math.round(Math.min(1, base) * 100);
   return {
@@ -46,6 +91,7 @@ export function scorePair(g: GazetteEntry, c: ClientMark): { score: number; brea
       dice: Math.round(dice * 100),
       phonetic: Math.round(phon * 100),
       contained: contained ? 1 : 0,
+      sharedWord: sharedWord ? 1 : 0,
     },
   };
 }
@@ -74,6 +120,7 @@ export interface SweepResult {
 export function sweep(gazette: GazetteEntry[], marks: ClientMark[], opts: SweepOptions = DEFAULT_SWEEP): SweepResult {
   const t0 = Date.now();
   const { byTrigram, bySoundex } = buildIndex(marks, opts.minDenomLen);
+  const isRare = rareWordPredicate(gazette, marks);
   const candidates: Candidate[] = [];
   let pairsScored = 0;
 
@@ -93,7 +140,7 @@ export function sweep(gazette: GazetteEntry[], marks: ClientMark[], opts: SweepO
     for (const idx of candIdx) {
       const c = marks[idx];
       pairsScored++;
-      const { score, breakdown } = scorePair(g, c);
+      const { score, breakdown } = scorePair(g, c, isRare);
       if (score < opts.threshold) continue;
       const { matching, related } = classOverlap(g.classes, c.classes);
       const sameOwner = sameEntity(g.applicant, c.holder);

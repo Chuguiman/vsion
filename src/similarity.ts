@@ -78,9 +78,20 @@ export function diceCoefficient(a: Set<string>, b: Set<string>): number {
   return (2 * inter) / (a.size + b.size);
 }
 
-/** true si una cadena contiene a la otra (mín 4 chars) */
-export function containment(a: string, b: string): boolean {
-  if (a.length < 4 || b.length < 4) return false;
-  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  return long.includes(short);
+/**
+ * Contención en límite de palabra: la marca corta (sin espacios) debe aparecer
+ * en la larga empezando o terminando en un límite de palabra (puede abarcar
+ * varias palabras). "COCACOLA" ⊂ "COCA COLA ZERO", "LEON" ⊂ "LEONA",
+ * "ETEK" ⊂ "MALETEK" sí; "NAMA" ⊂ "CUNDINAMARCA" (a mitad de palabra) no.
+ * @param aClean/bClean forma sin espacios; aWords/bWords forma con espacios.
+ */
+export function wordContainment(aClean: string, aWords: string, bClean: string, bWords: string): boolean {
+  if (aClean.length < 4 || bClean.length < 4) return false;
+  const [short, longWords] = aClean.length <= bClean.length ? [aClean, bWords] : [bClean, aWords];
+  const words = longWords.split(" ").filter(Boolean);
+  for (let i = 0; i < words.length; i++) {
+    if (words.slice(i).join("").startsWith(short)) return true;
+    if (words.slice(0, i + 1).join("").endsWith(short)) return true;
+  }
+  return false;
 }
