@@ -35,13 +35,48 @@ Base your analysis ONLY on the provided data. Never invent facts.
 ## DECISION PROCEDURE
 STEP 1 — Class gate: if classes_in_common is "none" AND related_classes is
 "none", output "no_action" immediately (different markets = no confusion).
-STEP 2 — Similarity gate: output "no_action" if similarity_score < 55, OR the
-dominant portions differ in sound/appearance/meaning, OR the only shared part
-is a generic/descriptive prefix or suffix (AGR, BIO, TECH, FARM...).
-STEP 3 — Classify:
-- "file_opposition": strong phonetic/visual similarity in dominant portions AND
-  at least one exact or related class. Average consumer would plausibly confuse.
-- "monitor_closely": moderate but real similarity AND class overlap.
+STEP 2 — Distinctive core: strip from BOTH marks every word that is generic,
+descriptive of the goods/services or common in the sector, in ANY language
+(e.g. SHOES/ZAPATOS/CALZADO in class 25, CAFÉ/COFFEE, AGUA/WATER, CLÍNICA,
+ENERGÍA, ACCESORIOS, DISTRIBUIDORA, STORE, SHOP, FASHION, STUDIO, DESIGN),
+laudatory words (PREMIUM, GOLD, PLUS, REAL) and company forms (CO, SAS, S.A.,
+LTDA, GRUPO). Those words are free for everyone and many registered marks
+coexist sharing them. Compare ONLY what remains.
+STEP 3 — Similarity gate: output "no_action" if similarity_score < 55, OR the
+distinctive cores differ in sound/appearance/meaning, OR the only shared part is
+a generic/descriptive word, prefix or suffix (AGR, BIO, TECH, FARM, SHOES...).
+Example: "EFRAN SHOES CO" vs "BASICS SHOES" → cores EFRAN vs BASICS differ →
+"no_action", even in the same class.
+PHONETIC IDENTITY OVERRIDES STEP 3. Act like a real person reading both marks
+ALOUD — first as a Spanish speaker, then in English, Portuguese and French:
+- Spanish traps: H is silent (HOLA = OLA) but CH is sounded (CHOLA ≠ OLA);
+  C(a,o,u) = K = QU (QUESO = KESO, KE = QUE); C(e,i) = S = Z (ZARA = SARA);
+  B = V (BACA = VACA); G(e,i) = J (GIRASOL = JIRASOL); LL = Y (LLAVE = YAVE).
+- Acronyms/consonant clusters are spelled by letter names and digits read as
+  words: PK2 = "pe-ka-dos" = PECADOS; an unpronounceable start gets a vowel:
+  KSA = "kasa" = CASA = KASA = KAZA.
+- Digits/symbols used as letters: KOL1N@ = KOLINA.
+- W = GU = HU before a vowel (WHAT = GUAT, HUEVO = WEBO). Read word by word:
+  C HORIZON ("ce horizon") ≠ CHORIZÓN. Unpronounceable endings are spelled:
+  PANQK = "pan-ke-ka" = PANQUECA.
+- Other languages and cross-language: SHANEL = CHANEL, NAIK = NIKE, CONTÍ = KONTI,
+  COOL (read in English) = KUL = CUL (read in Spanish), QUEEN = KUIN.
+- X: initial X sounds S (XILABA = SILABA); -XIÓN = -SIÓN = -CIÓN = -ZIÓN; RR ≈ R
+  (CORRI = KORI).
+Common CONFUSIONS (not identical, but real risk → at least "monitor_closely"
+with class overlap): R ↔ L as many Chinese/Japanese/English speakers say it
+(CARRO = "calo"), and an R/L lost after a consonant (FREIJOA ≈ FEIJOA).
+When phonetic identity or confusion drives your verdict, say in the summary how both marks
+are read aloud (e.g. 'PK2 se lee "pe-ka-dos", igual que PECADOS').
+If the distinctive cores can SOUND IDENTICAL in any of those languages and there
+is an exact or related class → "file_opposition". The field
+phonetically_identical_in reports what an automatic check found; still do your
+own reading aloud, the check can miss cases.
+STEP 4 — Classify:
+- "file_opposition": strong phonetic/visual similarity of the distinctive cores
+  AND at least one exact or related class. Average consumer would plausibly confuse.
+- "monitor_closely": moderate but real similarity of the distinctive cores AND
+  class overlap. Sharing only a generic word is NOT moderate similarity.
 - otherwise "no_action".
 CONSISTENCY: if your reasoning concludes low risk, recommendation MUST be no_action.
 

@@ -11,6 +11,9 @@ import BarcodeStat, { type Seg } from "./BarcodeStat";
 import CandCard from "./CandCard";
 import ClassChips from "./ClassChips";
 import ZoomImage from "./ZoomImage";
+import GenericBadge from "./GenericBadge";
+import { genericOnlyOverlap } from "@/generic-words";
+import { phoneticallyIdentical } from "@/phonetic-langs";
 
 const C = { red: "#ef4444", amber: "#f59e0b", blue: "#3b82f6", violet: "#8b5cf6", muted: "#71717a", green: "#10b981" };
 
@@ -48,6 +51,12 @@ function scoreColor(s: number): string {
 
 function candKeyOf(pub: PubDTO, c: CandDTO): string {
   return `${pub.applicationNumber || pub.denom}::${c.clientCode}::${c.clientDenom}`;
+}
+
+/** Términos genéricos que explican por sí solos el parecido (p.ej. SHOES), o null. */
+function genericTermsOf(pub: PubDTO, c: CandDTO): string[] | null {
+  if (c.relation !== "conflict" || phoneticallyIdentical(pub.denom, c.clientDenom).length) return null;
+  return genericOnlyOverlap(pub.denom, c.clientDenom);
 }
 
 function RelationCell({ c }: { c: CandDTO }) {
@@ -89,6 +98,7 @@ function Row({ c, pub, reviewable, status, reviewer, onReview, clientImage }: {
 }) {
   const col = scoreColor(c.score);
   const dim = status === "discarded";
+  const generic = genericTermsOf(pub, c);
   return (
     <tr className={`border-b border-[var(--bd)] last:border-0 ${dim ? "opacity-45" : ""}`}>
       <td className="whitespace-nowrap px-4 py-2.5">
@@ -104,6 +114,7 @@ function Row({ c, pub, reviewable, status, reviewer, onReview, clientImage }: {
             <div className={`font-semibold ${dim ? "line-through" : ""}`}>{c.clientDenom}</div>
             <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
             {c.clientHolder && <div className="text-xs text-blue-300">Titular: {c.clientHolder}</div>}
+            {generic && <GenericBadge terms={generic} />}
           </div>
         </div>
       </td>
@@ -178,7 +189,7 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGro
       <div className="space-y-2 p-3 sm:hidden">
         {reviewable && <p className="text-[11px] text-[var(--mut)]">Desliza → aprobar · ← descartar</p>}
         {rows.map((c) => (
-          <CandCard key={candKeyOf(g, c)} c={c} candKey={candKeyOf(g, c)} reviewable={reviewable}
+          <CandCard key={candKeyOf(g, c)} c={c} candKey={candKeyOf(g, c)} reviewable={reviewable} genericTerms={genericTermsOf(g, c)}
             status={reviews[candKeyOf(g, c)]} reviewer={reviewers[candKeyOf(g, c)]} onReview={onReview} clientImage={clientImages[c.clientCode]} />
         ))}
       </div>
@@ -302,18 +313,23 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
   const matchingGroups = groups.map((g) => ({ ...g, candidates: g.candidates.filter((c) => matchesFilter(c, filter)) }));
   const reviewCounts = { pending: 0, approved: 0, discarded: 0, all: 0 };
   const pendingInView: string[] = []; // claves pendientes de la vista actual (para acción masiva)
+  const pendingGenericInView: string[] = []; // … de ellas, las que solo comparten un término genérico
   for (const g of matchingGroups) for (const c of g.candidates) {
     const st = (reviews[candKeyOf(g, c)] as ReviewStatus | undefined) ?? "pending";
     reviewCounts[st]++;
     reviewCounts.all++;
-    if (st === "pending") pendingInView.push(candKeyOf(g, c));
+    if (st === "pending") {
+      pendingInView.push(candKeyOf(g, c));
+      if (genericTermsOf(g, c)) pendingGenericInView.push(candKeyOf(g, c));
+    }
   }
 
-  async function discardKeys(rawKeys: string[], opts?: { confirm?: boolean }) {
+  async function discardKeys(rawKeys: string[], opts?: { confirm?: boolean | string }) {
     if (!runId || bulkBusy) return;
     const keys = rawKeys.filter((k) => !savingReviews.current.has(k));
     if (!keys.length) return;
-    if (opts?.confirm && !confirm(`¿Descartar ${keys.length} ${keys.length === 1 ? "pendiente" : "pendientes"}? Podrás devolver alguna a pendiente después.`)) return;
+    const what = typeof opts?.confirm === "string" ? opts.confirm : (keys.length === 1 ? "pendiente" : "pendientes");
+    if (opts?.confirm && !confirm(`¿Descartar ${keys.length} ${what}? Podrás devolver alguna a pendiente después.`)) return;
     setBulkBusy(true);
     setReviewError(null);
     const prev = keys.map((k) => ({ k, s: reviews[k], w: reviewers[k] }));
@@ -452,6 +468,15 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
             title="Descarta de un golpe todas las pendientes de la vista actual"
             className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40">
             {bulkBusy ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />} Descartar pendientes ({pendingInView.length})
+          </button>
+        )}
+
+        {reviewable && pendingGenericInView.length > 0 && (
+          <button onClick={() => discardKeys(pendingGenericInView, { confirm: "pendientes que solo comparten un término genérico (SHOES, CLÍNICA, AGUA…)" })}
+            disabled={bulkBusy || savingCount > 0}
+            title="Descarta las pendientes cuyo único parecido es una palabra genérica/descriptiva; lo distintivo de cada marca es diferente"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--bd)] px-3 py-1.5 text-sm text-[var(--mut)] transition hover:bg-white/5 hover:text-[var(--tx)] disabled:cursor-not-allowed disabled:opacity-40">
+            {bulkBusy ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />} Descartar solo genéricos ({pendingGenericInView.length})
           </button>
         )}
 

@@ -6,6 +6,7 @@ import type { CandDTO, PubDTO, Relation, AiVerdict } from "@/lib/dto";
 import type { ReviewStatus } from "@/lib/reviews";
 import ClassChips from "./ClassChips";
 import ZoomImage from "./ZoomImage";
+import GenericBadge from "./GenericBadge";
 
 const REL_LABEL: Record<Relation, string> = { conflict: "Conflicto", firm: "Tu firma", own: "Tu marca" };
 const REL_CLASS: Record<Relation, string> = {
@@ -19,9 +20,9 @@ function scoreColor(s: number) { const t = Math.max(0, Math.min(1, (s - 55) / 45
 
 const THRESHOLD = 72;
 
-export default function CandCard({ c, candKey, status, reviewer, reviewable, onReview, clientImage }: {
+export default function CandCard({ c, candKey, status, reviewer, reviewable, onReview, clientImage, genericTerms }: {
   c: CandDTO; candKey: string; status?: ReviewStatus; reviewer?: string; reviewable: boolean;
-  onReview: (key: string, s: ReviewStatus | null) => void; clientImage?: string;
+  onReview: (key: string, s: ReviewStatus | null) => void; clientImage?: string; genericTerms?: string[] | null;
 }) {
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -70,6 +71,7 @@ export default function CandCard({ c, candKey, status, reviewer, reviewable, onR
               <div className={`font-semibold ${dim ? "line-through" : ""}`}>{c.clientDenom}</div>
               <div className="font-mono text-xs text-[var(--mut)]">{c.clientCode} · {c.clientStatus}</div>
               {c.clientHolder && <div className="truncate text-xs text-blue-300">Titular: {c.clientHolder}</div>}
+              {genericTerms && <GenericBadge terms={genericTerms} />}
             </div>
           </div>
           <div className="shrink-0 text-right">

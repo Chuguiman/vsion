@@ -1,5 +1,6 @@
 import { getDb, withDbRetry } from "./db";
 import { SYSTEM_PROMPT } from "@/ai-review";
+import { phoneticallyIdentical, phoneticConfusion, sharedReading, LANG_LABEL } from "@/phonetic-langs";
 import type { ReportDTO, CandDTO, PubDTO, AiResult, AiVerdict } from "./dto";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
@@ -22,6 +23,8 @@ function buildPrompt(cand: CandDTO, pub: PubDTO, jurisdiction: string, lang: str
     `classes_in_common: ${cand.matchingClasses.join(", ") || "none"}`,
     `related_classes: ${cand.relatedClasses.join(", ") || "none"}`,
     `similarity_score: ${cand.score}`,
+    `phonetically_identical_in: ${phoneticNote(pub.denom, cand.clientDenom) ?? "none detected (still read both aloud yourself)"}`,
+    `common_phonetic_confusion: ${phoneticConfusion(pub.denom, cand.clientDenom) ?? "none detected"}`,
     "</case_data>",
   ].join("\n");
 }
@@ -56,6 +59,42 @@ async function callOne(cand: CandDTO, pub: PubDTO, apiKey: string, model: string
   throw lastErr ?? new Error("agotó reintentos");
 }
 
+/** "español, inglés (lectura "pekados")" o null si no suenan idénticas. */
+function phoneticNote(a: string, b: string): string | null {
+  const langs = phoneticallyIdentical(a, b);
+  if (!langs.length) return null;
+  const r = sharedReading(a, b);
+  return `${langs.map((l) => LANG_LABEL[l]).join(", ")}${r ? ` (lectura ${r})` : ""}`;
+}
+
+/**
+ * Regla dura sobre el veredicto de la IA: si suenan IDÉNTICAS leídas en voz alta
+ * en español, inglés, portugués o francés (CONTÍ/KONTI, KSA/CASA, PK2/PECADOS,
+ * BACA/VACA) → "Oponerse" con clase común/relacionada; sin clase, al menos "Vigilar".
+ */
+export function withSafetyNet(cand: CandDTO, pub: PubDTO, ai: AiResult): AiResult {
+  const note = phoneticNote(pub.denom, cand.clientDenom);
+  const classes = cand.matchingClasses.length > 0 || cand.relatedClasses.length > 0;
+  if (!note) {
+    // Nivel 2: confusión frecuente (CARRO/CALO, FREIJOA/FEIJOA) → al menos "Vigilar" con clase.
+    const conf = phoneticConfusion(pub.denom, cand.clientDenom);
+    if (!conf || !classes) return ai;
+    const base = ai.summary.replace(/^Posible confusión fonética[^.]*\.\s*(IA:\s*)?/, "");
+    const rec = ai.recommendation === "no_action" ? "monitor_closely" : ai.recommendation;
+    return { ...ai, recommendation: rec, prob: rec === ai.recommendation ? ai.prob : Math.max(ai.prob, 40), summary: `Posible confusión fonética: ${conf}. IA: ${base}` };
+  }
+  const how = `Fonéticamente idéntica en ${note}`;
+  const base = ai.summary.replace(/^Fonéticamente idéntica[^.]*\.\s*(IA:\s*)?/, ""); // idempotente
+  if (classes && ai.recommendation !== "file_opposition") {
+    return { ...ai, recommendation: "file_opposition", prob: Math.max(ai.prob, 70), summary: `${how}, con clase común o relacionada: posible oposición. IA: ${base}` };
+  }
+  if (!classes && ai.recommendation === "no_action") {
+    return { ...ai, recommendation: "monitor_closely", prob: Math.max(ai.prob, 40), summary: `${how}, aunque sin clase común ni relacionada: revisar. IA: ${base}` };
+  }
+  // La IA ya coincidía: igual se deja la explicación fonética en el resumen.
+  return { ...ai, summary: `${how}. ${base}` };
+}
+
 export interface BatchResult { ok: boolean; error?: string; analyzed: number; total: number; remaining: number; }
 
 /** Analiza un lote de conflictos sin veredicto y persiste en el payload. */
@@ -79,14 +118,14 @@ export async function analyzeRunBatch(runId: number, batchSize = 15): Promise<Ba
   // Pre-filtro (puerta de clase): un conflicto SIN clase en común/relacionada y con
   // score < 85 es distinto mercado → la IA diría "no_action". Se resuelve sin llamada.
   const worthy = (c: CandDTO) => c.matchingClasses.length > 0 || c.relatedClasses.length > 0 || c.score >= 85;
-  for (const { cand } of conflicts) {
+  for (const { cand, pub } of conflicts) {
     if (!cand.ai && !worthy(cand)) {
-      cand.ai = {
+      cand.ai = withSafetyNet(cand, pub, {
         recommendation: "no_action",
         prob: 0,
         summary: "Sin clase en común ni relacionada y similitud por debajo de 85%: distinto mercado, sin riesgo de confusión.",
         reasoning: "Descartado por la puerta de clase (sin coincidencia de clases y score bajo). No requiere revisión.",
-      };
+      });
     }
   }
 
@@ -101,7 +140,7 @@ export async function analyzeRunBatch(runId: number, batchSize = 15): Promise<Ba
     while (true) {
       const i = cursor++;
       if (i >= batch.length) break;
-      try { batch[i].cand.ai = await callOne(batch[i].cand, batch[i].pub, apiKey, model, jur, lang); analyzedNow++; }
+      try { batch[i].cand.ai = withSafetyNet(batch[i].cand, batch[i].pub, await callOne(batch[i].cand, batch[i].pub, apiKey, model, jur, lang)); analyzedNow++; }
       catch (e) { console.error("[ai-web]", e instanceof Error ? e.message : e); }
     }
   };

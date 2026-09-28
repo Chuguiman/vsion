@@ -6,6 +6,8 @@ import { jaroWinkler, levenshteinRatio, diceCoefficient, wordContainment } from 
 import { classOverlap } from "./classes";
 import { sameEntity } from "./owner";
 import type { ClientMark, GazetteEntry, Candidate } from "./types";
+import { GENERIC_WORDS } from "./generic-words";
+import { phoneticallyIdentical, phoneticConfusion, phoneticIndexKeys } from "./phonetic-langs";
 
 export interface SweepOptions {
   threshold: number;      // score mínimo para conservar (0..100)
@@ -32,9 +34,14 @@ const RARE_CARTERA_MIN = 10;
 const RARE_CARTERA_RATIO = 0.002;
 // Score mínimo cuando comparten una palabra distintiva y una clase (≥ threshold para conservarlo).
 const SHARED_WORD_FLOOR = 0.60;
+// Score mínimo cuando suenan idénticas en ES/EN/PT/FR.
+const PHONETIC_IDENTICAL_FLOOR = 0.85;
+// Score mínimo con confusión fonética frecuente (R/L).
+const PHONETIC_CONFUSION_FLOOR = 0.75;
 
 function wordsOf(words: string): string[] {
-  return words.split(" ").filter((w) => w.length >= MIN_WORD_LEN && !STOPWORDS.has(w));
+  // Genéricos/descriptivos (SHOES, CLÍNICA, AGUA…) no cuentan como palabra distintiva compartida.
+  return words.split(" ").filter((w) => w.length >= MIN_WORD_LEN && !STOPWORDS.has(w) && !GENERIC_WORDS.has(w));
 }
 
 function docFreq(items: { keys: { words: string } }[]): Map<string, number> {
@@ -82,6 +89,13 @@ export function scorePair(g: GazetteEntry, c: ClientMark, isRare?: (w: string) =
     if (sharedWord) base = Math.max(base, SHARED_WORD_FLOOR);
   }
 
+  // Suena idéntica en español, inglés, portugués o francés (CONTÍ/KONTI, KSA/CASA):
+  // riesgo alto aunque la escritura difiera.
+  const soundsSame = phoneticallyIdentical(g.denom, c.denom).length > 0;
+  if (soundsSame) base = Math.max(base, PHONETIC_IDENTICAL_FLOOR);
+  // Confusión frecuente R/L o líquida perdida (CARRO/CALO, FREIJOA/FEIJOA)
+  else if (phoneticConfusion(g.denom, c.denom)) base = Math.max(base, PHONETIC_CONFUSION_FLOOR);
+
   const score = Math.round(Math.min(1, base) * 100);
   return {
     score,
@@ -92,6 +106,7 @@ export function scorePair(g: GazetteEntry, c: ClientMark, isRare?: (w: string) =
       phonetic: Math.round(phon * 100),
       contained: contained ? 1 : 0,
       sharedWord: sharedWord ? 1 : 0,
+      phoneticIdentical: soundsSame ? 1 : 0,
     },
   };
 }
@@ -100,8 +115,12 @@ export function scorePair(g: GazetteEntry, c: ClientMark, isRare?: (w: string) =
 function buildIndex(marks: ClientMark[], minLen: number) {
   const byTrigram = new Map<string, number[]>();
   const bySoundex = new Map<string, number[]>();
+  const byPhonetic = new Map<string, number[]>(); // claves fonéticas ES/EN/PT/FR
   marks.forEach((m, i) => {
     if (m.keys.clean.length < minLen) return; // omite marcas de 1-2 letras
+    for (const k of phoneticIndexKeys(m.denom)) {
+      let arr = byPhonetic.get(k); if (!arr) { arr = []; byPhonetic.set(k, arr); } arr.push(i);
+    }
     for (const g of m.keys.trigrams) {
       let arr = byTrigram.get(g); if (!arr) { arr = []; byTrigram.set(g, arr); } arr.push(i);
     }
@@ -109,7 +128,7 @@ function buildIndex(marks: ClientMark[], minLen: number) {
       let arr = bySoundex.get(m.keys.soundex); if (!arr) { arr = []; bySoundex.set(m.keys.soundex, arr); } arr.push(i);
     }
   });
-  return { byTrigram, bySoundex };
+  return { byTrigram, bySoundex, byPhonetic };
 }
 
 export interface SweepResult {
@@ -119,7 +138,7 @@ export interface SweepResult {
 
 export function sweep(gazette: GazetteEntry[], marks: ClientMark[], opts: SweepOptions = DEFAULT_SWEEP): SweepResult {
   const t0 = Date.now();
-  const { byTrigram, bySoundex } = buildIndex(marks, opts.minDenomLen);
+  const { byTrigram, bySoundex, byPhonetic } = buildIndex(marks, opts.minDenomLen);
   const isRare = rareWordPredicate(gazette, marks);
   const candidates: Candidate[] = [];
   let pairsScored = 0;
@@ -135,6 +154,7 @@ export function sweep(gazette: GazetteEntry[], marks: ClientMark[], opts: SweepO
     const candIdx = new Set<number>();
     for (const [idx, n] of counts) if (n >= opts.minSharedTrigrams) candIdx.add(idx);
     if (g.keys.soundex) for (const idx of bySoundex.get(g.keys.soundex) ?? []) candIdx.add(idx);
+    for (const k of phoneticIndexKeys(g.denom)) for (const idx of byPhonetic.get(k) ?? []) candIdx.add(idx);
 
     const scored: Candidate[] = [];
     for (const idx of candIdx) {
