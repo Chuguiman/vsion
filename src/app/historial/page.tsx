@@ -79,17 +79,63 @@ export default async function Historial() {
       {rows.length === 0 ? (
         <p className="text-sm text-[var(--mut)]">Aún no hay corridas.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
+        <>
+        {/* Móvil / tablet: tarjetas */}
+        <ul className="space-y-3 lg:hidden">
+          {rows.map((r) => (
+            <li key={r.id} className="rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <Link href={`/runs/${r.id}`} className="font-mono text-base font-semibold text-[var(--acc)] hover:underline">
+                    {r.country}{r.gazette_number}
+                  </Link>
+                  {isSuper && <div className="truncate text-sm">{r.organization_name ?? "Sin organización"}</div>}
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <span title="Candidatos retenidos por el barrido de similitud"
+                    className="rounded border border-[var(--acc)]/40 bg-[var(--acc)]/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-[var(--acc)]">
+                    {r.n_candidates.toLocaleString()} hits
+                  </span>
+                  {isSuper && <DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} />}
+                </div>
+              </div>
+              <div className="mt-1 text-xs text-[var(--mut)]">
+                Publicada {fmtDate(r.date_public)} · Procesada {fmtDate(r.created_at)}
+              </div>
+              {r.n_analyzed > 0 ? (
+                <dl className="mt-3 grid grid-cols-4 gap-2 text-center" title="Revisión de las seleccionadas por IA (oponerse + vigilar)">
+                  {([
+                    ["Pendientes", pending(r), pending(r) > 0 ? "font-semibold text-amber-500" : ""],
+                    ["Aprobadas", r.n_approved, ""],
+                    ["Descartadas", r.n_discarded, ""],
+                    ["Todas (IA)", r.n_ai_selected, ""],
+                  ] as const).map(([label, v, cls]) => (
+                    <div key={label} className="rounded-lg border border-[var(--bd)] px-1 py-1.5">
+                      <dt className="truncate text-[10px] text-[var(--mut)]">{label}</dt>
+                      <dd className={`font-mono text-sm ${cls}`}>{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : (
+                <p className="mt-3 text-xs text-[var(--mut)]">Sin análisis IA</p>
+              )}
+              <div className="mt-3"><BarcodeStat segments={distribution(r)} compact /></div>
+            </li>
+          ))}
+        </ul>
+
+        {/* Escritorio: tabla */}
+        <div className="hidden overflow-x-auto rounded-xl border border-[var(--bd)] bg-[var(--bg2)] lg:block">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="text-[11px] uppercase tracking-wide text-[var(--mut)]">
-                <th rowSpan={2} className="px-4 py-2 font-medium">Publicación</th>
-                {isSuper && <th rowSpan={2} className="px-4 py-2 font-medium">Organización</th>}
-                <th rowSpan={2} className="px-4 py-2 font-medium">Publicada</th>
+                <th rowSpan={2} className="px-3 py-2 font-medium">Publicación</th>
+                {isSuper && <th rowSpan={2} className="px-3 py-2 font-medium">Organización</th>}
+                <th rowSpan={2} className="px-3 py-2 font-medium">Publicada</th>
                 <th colSpan={5} className="border-b border-[var(--bd)] px-2 pb-1 pt-2 text-center font-medium">Hits / matches</th>
-                <th rowSpan={2} className="w-[40%] px-4 py-2 font-medium">Distribución</th>
-                <th rowSpan={2} className="px-4 py-2 font-medium">Procesada</th>
-                {isSuper && <th rowSpan={2} className="px-4 py-2 font-medium"></th>}
+                <th rowSpan={2} className="min-w-56 px-3 py-2 font-medium">Distribución</th>
+                <th rowSpan={2} className="px-3 py-2 font-medium">Procesada</th>
+                {isSuper && <th rowSpan={2} className="w-10 px-3 py-2 font-medium"></th>}
               </tr>
               <tr className="text-[10px] text-[var(--mut)]" title="Revisión de las seleccionadas por IA (oponerse + vigilar)">
                 {["Hits", "Pendientes", "Aprobadas", "Descartadas", "Todas (IA)"].map((h) => (
@@ -100,13 +146,13 @@ export default async function Historial() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id} className="border-b border-[var(--bd)] last:border-0 hover:bg-white/5">
-                  <td className="px-4 py-2.5">
+                  <td className="px-3 py-2.5">
                     <Link href={`/runs/${r.id}`} className="font-mono text-[var(--acc)] hover:underline">
                       {r.country}{r.gazette_number}
                     </Link>
                   </td>
-                  {isSuper && <td className="px-4 py-2.5">{r.organization_name ?? "Sin organización"}</td>}
-                  <td className="px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.date_public)}</td>
+                  {isSuper && <td className="px-3 py-2.5">{r.organization_name ?? "Sin organización"}</td>}
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[var(--mut)]">{fmtDate(r.date_public)}</td>
                   <td className="px-2 py-2.5 text-center" title="Candidatos retenidos por el barrido de similitud">
                     <span className="inline-flex min-w-8 items-center justify-center rounded border border-[var(--acc)]/40 bg-[var(--acc)]/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-[var(--acc)]">
                       {r.n_candidates.toLocaleString()}
@@ -122,14 +168,15 @@ export default async function Historial() {
                   ) : (
                     <td colSpan={4} className="px-2 py-2.5 text-center text-[11px] text-[var(--mut)]">Sin análisis IA</td>
                   )}
-                  <td className="px-4 py-2.5"><BarcodeStat segments={distribution(r)} compact /></td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-[var(--mut)]">{fmtDate(r.created_at)}</td>
-                  {isSuper && <td className="px-4 py-2.5 text-right"><DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} /></td>}
+                  <td className="px-3 py-2.5"><BarcodeStat segments={distribution(r)} compact /></td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-[var(--mut)]">{fmtDate(r.created_at)}</td>
+                  {isSuper && <td className="px-3 py-2.5 text-right"><DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} /></td>}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

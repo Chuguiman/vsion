@@ -22,7 +22,7 @@ export default function BarcodeStat({ segments, total, activeId, onSelect, compa
   const someActive = interactive && visible.some((s) => s.id === activeId);
 
   return (
-    <div className={compact ? "min-w-72" : "rounded-2xl border border-[var(--bd)] bg-[var(--bg2)] p-4"}>
+    <div className={compact ? "min-w-0" : "rounded-2xl border border-[var(--bd)] bg-[var(--bg2)] p-4"}>
       {/* etiquetas + % (clicables si hay filtro) */}
       <div className={compact ? "hidden" : "flex items-end gap-2"}>
         {visible.map((s) => {
