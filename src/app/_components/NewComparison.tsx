@@ -26,6 +26,32 @@ function Drop({ label, hint, file, onFile }: {
   );
 }
 
+function Step({ n, title, sub, children }: { n: number; title: string; sub: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-6">
+      <div className="mb-2 flex items-baseline gap-2">
+        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--acc)] text-xs font-semibold text-black">{n}</span>
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <span className="text-xs text-[var(--mut)]">{sub}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function SourceCard({ active, disabled, onClick, icon, title, desc }: {
+  active: boolean; disabled?: boolean; onClick: () => void; icon: React.ReactNode; title: string; desc: string;
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled} aria-pressed={active}
+      className={`rounded-xl border p-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
+        active ? "border-[var(--acc)] bg-[var(--acc)]/10" : "border-[var(--bd)] bg-[var(--bg2)] hover:border-[var(--acc)]"}`}>
+      <div className={`flex items-center gap-1.5 text-sm font-medium ${active ? "text-[var(--acc)]" : ""}`}>{icon} {title}</div>
+      <div className="mt-1 text-xs text-[var(--mut)]">{desc}</div>
+    </button>
+  );
+}
+
 export default function NewComparison({ carteraInfo, orgs = [], isSuper = false }: {
   carteraInfo: { count: number; updatedAt: string | null } | null;
   orgs?: { id: number; name: string }[];
@@ -60,7 +86,12 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
     if (isSuper && !orgId) { setGazettes([]); setGazetteId(""); return; }
     let alive = true;
     listReusableGazettesAction(isSuper ? Number(orgId) : null)
-      .then((r) => { if (alive) { setGazettes(r.gazettes ?? []); setGazetteId(""); } })
+      .then((r) => {
+        if (!alive) return;
+        const list = r.gazettes ?? [];
+        setGazettes(list); setGazetteId("");
+        if (!list.length) setSource("upload");
+      })
       .catch(() => { if (alive) setGazettes([]); });
     return () => { alive = false; };
   }, [orgId, isSuper]);
@@ -94,9 +125,16 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
     hasCartera ? (source === "reuse" ? !!gazetteId : !!gazette) : (!!gazette && !!client)
   );
 
+  // El botón dice qué gaceta se va a comparar.
+  const chosen = hasCartera && source === "reuse"
+    ? gazettes.find((g) => String(g.id) === gazetteId)
+    : null;
+  const target = chosen ? `${chosen.country}${chosen.number}` : gazette?.name.replace(/\.json$/i, "");
+  const runLabel = target ? `Comparar ${target} con la cartera` : "Comparar";
+
   return (
     <div>
-      <h1 className="mb-1 text-xl font-semibold">Nueva comparación</h1>
+      <h1 className="mb-4 text-xl font-semibold">Nueva comparación</h1>
 
       {isSuper && (
         <div className="mb-5 max-w-md">
@@ -109,47 +147,44 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
 
       {hasCartera ? (
         <>
-          <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-4 py-3 text-sm">
-            <Database size={16} className="text-[var(--acc)]" />
-            <span className="font-medium">{info!.count.toLocaleString()} marcas</span>
-            <span className="text-[var(--mut)]">en cartera</span>
-            {info!.updatedAt && (
-              <span className="text-xs text-[var(--mut)]">· importada {new Date(info!.updatedAt).toLocaleDateString("es")}</span>
-            )}
-            <Link href="/cartera" className="ml-auto text-xs text-[var(--acc)] hover:underline">Reemplazar cartera</Link>
-          </div>
-          <p className="mb-3 text-sm text-[var(--mut)]">Compara contra tu cartera guardada: sube la publicación o elige una gaceta ya cargada.</p>
-
-          {/* Pestañas: subir archivo o reutilizar una gaceta ya cargada */}
-          <div className="mb-4 inline-flex rounded-lg border border-[var(--bd)] bg-[var(--bg2)] p-0.5 text-sm">
-            <button type="button" onClick={() => setSource("upload")}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition ${source === "upload" ? "bg-[var(--acc)] text-black" : "text-[var(--mut)] hover:text-[var(--tx)]"}`}>
-              <FileJson size={15} /> Subir archivo
-            </button>
-            <button type="button" onClick={() => setSource("reuse")}
-              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 transition ${source === "reuse" ? "bg-[var(--acc)] text-black" : "text-[var(--mut)] hover:text-[var(--tx)]"}`}>
-              <Archive size={15} /> Gaceta cargada{gazettes.length > 0 ? ` (${gazettes.length})` : ""}
-            </button>
-          </div>
-
-          {source === "upload" ? (
-            <div className="mb-4 max-w-md">
-              <Drop label="Publicación" hint="CO####.json" file={gazette} onFile={setGazette} />
+          {/* Paso 1: la cartera del cliente ya está en la BD; no se sube aquí. */}
+          <Step n={1} title="Cartera del cliente" sub="Marcas propias a vigilar · guardadas en la base de datos">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-[var(--bd)] bg-[var(--bg2)] px-4 py-3 text-sm">
+              <Database size={16} className="text-[var(--acc)]" />
+              <span className="font-medium">{info!.count.toLocaleString()} marcas</span>
+              <span className="text-[var(--mut)]">en cartera</span>
+              {info!.updatedAt && (
+                <span className="text-xs text-[var(--mut)]">· importada {new Date(info!.updatedAt).toLocaleDateString("es")}</span>
+              )}
+              <Link href="/cartera" className="ml-auto text-xs text-[var(--acc)] hover:underline">Reemplazar cartera</Link>
             </div>
-          ) : (
-            <div className="mb-4 max-w-md">
-              <label className="mb-1 block text-xs font-medium text-[var(--mut)]">Gaceta ya cargada</label>
-              <StyledSelect value={gazetteId} onChange={setGazetteId} ariaLabel="Gaceta ya cargada"
-                options={[{ value: "", label: "Elige una gaceta…" }, ...gazettes.map((g) => ({
-                  value: String(g.id), label: `${g.country}${g.number} · ${g.pub_count.toLocaleString()} publicaciones${g.date_public ? ` · ${g.date_public}` : ""}`,
-                }))]} />
-              <p className="mt-1.5 text-xs text-[var(--mut)]">
-                {gazettes.length === 0
-                  ? "No hay gacetas pendientes. Aparecen las de países habilitados en Países, con publicaciones y que esta organización aún no comparó."
-                  : "Reutiliza las publicaciones e imágenes ya cargadas; no vuelve a subir el archivo."}
-              </p>
+          </Step>
+
+          {/* Paso 2: la publicación (gaceta) contra la que se compara. Dos alternativas. */}
+          <Step n={2} title="Publicación a comparar" sub="Gaceta oficial con las solicitudes de terceros">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <SourceCard active={source === "upload"} onClick={() => setSource("upload")}
+                icon={<FileJson size={16} />} title="Gaceta nueva"
+                desc="Subir el JSON de una gaceta que aún no está en el sistema (p. ej. CO1115.json)." />
+              <SourceCard active={source === "reuse"} onClick={() => setSource("reuse")} disabled={gazettes.length === 0}
+                icon={<Archive size={16} />}
+                title={`Gaceta ya cargada${gazettes.length > 0 ? ` (${gazettes.length})` : ""}`}
+                desc={gazettes.length > 0
+                  ? "Comparar con una gaceta que ya está en el sistema, sin volver a subir el archivo."
+                  : "No hay ninguna disponible: las gacetas ya cargadas ya fueron comparadas por esta organización."} />
             </div>
-          )}
+
+            <div className="mt-3 max-w-md">
+              {source === "upload" ? (
+                <Drop label="Archivo de la gaceta" hint="CO####.json (con imágenes ya procesadas)" file={gazette} onFile={setGazette} />
+              ) : (
+                <StyledSelect value={gazetteId} onChange={setGazetteId} ariaLabel="Gaceta ya cargada"
+                  options={[{ value: "", label: "Elige una gaceta…" }, ...gazettes.map((g) => ({
+                    value: String(g.id), label: `${g.country}${g.number} · ${g.pub_count.toLocaleString()} publicaciones${g.date_public ? ` · ${g.date_public}` : ""}`,
+                  }))]} />
+              )}
+            </div>
+          </Step>
         </>
       ) : (
         <>
@@ -167,7 +202,7 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
       <button onClick={run} disabled={!canRun}
         className="inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-4 py-2 font-medium text-black disabled:opacity-40">
         {busy ? <Loader2 className="animate-spin" size={16} /> : <UploadCloud size={16} />}
-        {busy ? "Procesando..." : "Comparar"}
+        {busy ? "Procesando..." : runLabel}
       </button>
       {needsOrg && <p className="mt-2 text-xs text-[var(--mut)]">Selecciona la organización para habilitar la comparación.</p>}
 
