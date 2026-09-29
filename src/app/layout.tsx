@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth";
 import { getAvatar } from "@/lib/users";
 import NavMenu, { type NavLink } from "./_components/NavMenu";
 import ThemeToggle from "./_components/ThemeToggle";
+import ScrollTopButton from "./_components/ScrollTopButton";
 import { logoutAction } from "./auth-actions";
 import "flag-icons/css/flag-icons.min.css";
 import "./globals.css";
@@ -38,6 +39,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html lang="es" suppressHydrationWarning>
       <body>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <ScrollTopButton />
         <header className={`border-b border-[var(--bd)] bg-[var(--bg2)] ${session ? "app-sidebar lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-64 lg:border-b-0 lg:border-r" : ""}`}>
           <div className={`mx-auto flex max-w-6xl items-center gap-x-2 px-4 py-3 ${session ? "lg:h-full lg:flex-col lg:items-stretch lg:gap-6 lg:p-4" : ""}`}>
             <Link href={isSuper ? "/" : "/historial"} aria-label="vsion — Inicio" title="vsion" className="sidebar-brand flex items-center gap-2 font-semibold tracking-wide">
