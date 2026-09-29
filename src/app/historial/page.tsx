@@ -106,8 +106,8 @@ export default async function Historial() {
                 <dl className="mt-3 grid grid-cols-4 gap-2 text-center" title="Revisión de las seleccionadas por IA (oponerse + vigilar)">
                   {([
                     ["Pendientes", pending(r), pending(r) > 0 ? "font-semibold text-amber-500" : ""],
-                    ["Aprobadas", r.n_approved, ""],
-                    ["Descartadas", r.n_discarded, ""],
+                    ["Aprobadas", r.n_approved, r.n_approved > 0 ? "font-semibold text-emerald-500" : ""],
+                    ["Descartadas", r.n_discarded, r.n_discarded > 0 ? "font-semibold text-red-500" : ""],
                     ["Todas (IA)", r.n_ai_selected, ""],
                   ] as const).map(([label, v, cls]) => (
                     <div key={label} className="rounded-lg border border-[var(--bd)] px-1 py-1.5">
@@ -161,8 +161,8 @@ export default async function Historial() {
                   {r.n_analyzed > 0 ? (
                     <>
                       <td className={`px-2 py-2.5 text-center font-mono text-xs ${pending(r) > 0 ? "font-semibold text-amber-500" : "text-[var(--mut)]"}`}>{pending(r)}</td>
-                      <td className="px-2 py-2.5 text-center font-mono text-xs">{r.n_approved}</td>
-                      <td className="px-2 py-2.5 text-center font-mono text-xs">{r.n_discarded}</td>
+                      <td className={`px-2 py-2.5 text-center font-mono text-xs ${r.n_approved > 0 ? "font-semibold text-emerald-500" : "text-[var(--mut)]"}`}>{r.n_approved}</td>
+                      <td className={`px-2 py-2.5 text-center font-mono text-xs ${r.n_discarded > 0 ? "font-semibold text-red-500" : "text-[var(--mut)]"}`}>{r.n_discarded}</td>
                       <td className="px-2 py-2.5 text-center font-mono text-xs">{r.n_ai_selected}</td>
                     </>
                   ) : (

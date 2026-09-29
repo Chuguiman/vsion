@@ -140,34 +140,36 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGro
     .map((c) => candKeyOf(g, c));
   return (
     <section className="mb-4 overflow-hidden rounded-xl border border-[var(--bd)] bg-[var(--bg2)]">
-      <header className="flex items-start gap-3 border-b border-[var(--bd)] px-4 py-3">
-        <span className="mt-0.5 shrink-0">
-          {imageUrl
-            ? <ZoomImage src={imageUrl} alt={g.denom || "Figurativa"} size={44} />
-            : <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-dashed border-[var(--bd)] text-[10px] text-[var(--mut)]">s/img</span>}
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold">{g.denom}</h2>
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--mut)]">
-            <span className="font-mono">{g.applicationNumber}</span>
-            <span>{g.markType}</span>
-            <span>Solicitante: {g.applicant || "—"}</span>
-            {g.representant && <span>Apoderado: <span className="font-medium text-teal-300">{g.representant}</span></span>}
+      <header className="border-b border-[var(--bd)] px-4 py-3">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 shrink-0">
+            {imageUrl
+              ? <ZoomImage src={imageUrl} alt={g.denom || "Figurativa"} size={44} />
+              : <span className="flex h-11 w-11 items-center justify-center rounded-lg border border-dashed border-[var(--bd)] text-[10px] text-[var(--mut)]">s/img</span>}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="break-words text-base font-semibold">{g.denom}</h2>
+            <div className="mt-0.5 text-xs text-[var(--mut)]"><span className="font-mono">{g.applicationNumber}</span> · {g.markType}</div>
           </div>
+          {reviewable && onDiscardGroup && pendingKeys.length > 0 && (
+            <button onClick={() => onDiscardGroup(pendingKeys)}
+              title="Descartar las pendientes de esta publicación"
+              className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-red-500/40 px-2 py-1 text-xs text-red-300 transition hover:bg-red-500/10">
+              <X size={13} /> <span className="hidden sm:inline">Descartar todas</span><span className="sm:hidden">Descartar</span> ({pendingKeys.length})
+            </button>
+          )}
+        </div>
+        {/* En móvil ocupa todo el ancho; en escritorio se alinea bajo el título */}
+        <div className="mt-2 space-y-0.5 text-xs text-[var(--mut)] sm:pl-14">
+          <div className="break-words">Solicitante: <span className="text-[var(--tx)]">{g.applicant || "—"}</span></div>
+          {g.representant && <div className="break-words">Apoderado: <span className="font-medium text-teal-300">{g.representant}</span></div>}
           {g.classes.length > 0 && (
-            <div className="mt-1 flex flex-wrap items-start gap-x-2 gap-y-1 text-xs text-[var(--mut)]">
+            <div className="flex flex-wrap items-start gap-x-2 gap-y-1 pt-0.5">
               <span className="pt-0.5">Clases:</span>
               <ClassChips classes={g.classes} pys={g.pys} wide />
             </div>
           )}
         </div>
-        {reviewable && onDiscardGroup && pendingKeys.length > 0 && (
-          <button onClick={() => onDiscardGroup(pendingKeys)}
-            title="Descartar todas las pendientes de esta publicación"
-            className="ml-auto shrink-0 inline-flex items-center gap-1 rounded-lg border border-red-500/40 px-2.5 py-1 text-xs text-red-300 transition hover:bg-red-500/10">
-            <X size={13} /> Descartar todas ({pendingKeys.length})
-          </button>
-        )}
       </header>
       {/* Desktop: tabla densa */}
       <table className="hidden w-full text-left sm:table">
@@ -187,7 +189,12 @@ function Pub({ g, filter, reviewable, reviews, reviewers, onReview, onDiscardGro
 
       {/* Móvil: tarjetas (swipe para aprobar/descartar) */}
       <div className="space-y-2 p-3 sm:hidden">
-        {reviewable && <p className="text-[11px] text-[var(--mut)]">Desliza → aprobar · ← descartar</p>}
+        {reviewable && (
+          <p className="flex justify-between text-[11px]">
+            <span className="text-emerald-400">Desliza → aprobar</span>
+            <span className="text-red-400">descartar ← desliza</span>
+          </p>
+        )}
         {rows.map((c) => (
           <CandCard key={candKeyOf(g, c)} c={c} candKey={candKeyOf(g, c)} reviewable={reviewable} genericTerms={genericTermsOf(g, c)}
             status={reviews[candKeyOf(g, c)]} reviewer={reviewers[candKeyOf(g, c)]} onReview={onReview} clientImage={clientImages[c.clientCode]} />
@@ -312,16 +319,10 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
 
   const matchingGroups = groups.map((g) => ({ ...g, candidates: g.candidates.filter((c) => matchesFilter(c, filter)) }));
   const reviewCounts = { pending: 0, approved: 0, discarded: 0, all: 0 };
-  const pendingInView: string[] = []; // claves pendientes de la vista actual (para acción masiva)
-  const pendingGenericInView: string[] = []; // … de ellas, las que solo comparten un término genérico
   for (const g of matchingGroups) for (const c of g.candidates) {
     const st = (reviews[candKeyOf(g, c)] as ReviewStatus | undefined) ?? "pending";
     reviewCounts[st]++;
     reviewCounts.all++;
-    if (st === "pending") {
-      pendingInView.push(candKeyOf(g, c));
-      if (genericTermsOf(g, c)) pendingGenericInView.push(candKeyOf(g, c));
-    }
   }
 
   async function discardKeys(rawKeys: string[], opts?: { confirm?: boolean | string }) {
@@ -461,23 +462,6 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
               </button>
             ))}
           </div>
-        )}
-
-        {reviewable && pendingInView.length > 0 && (
-          <button onClick={() => discardKeys(pendingInView, { confirm: true })} disabled={bulkBusy || savingCount > 0}
-            title="Descarta de un golpe todas las pendientes de la vista actual"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40">
-            {bulkBusy ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />} Descartar pendientes ({pendingInView.length})
-          </button>
-        )}
-
-        {reviewable && pendingGenericInView.length > 0 && (
-          <button onClick={() => discardKeys(pendingGenericInView, { confirm: "pendientes que solo comparten un término genérico (SHOES, CLÍNICA, AGUA…)" })}
-            disabled={bulkBusy || savingCount > 0}
-            title="Descarta las pendientes cuyo único parecido es una palabra genérica/descriptiva; lo distintivo de cada marca es diferente"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--bd)] px-3 py-1.5 text-sm text-[var(--mut)] transition hover:bg-white/5 hover:text-[var(--tx)] disabled:cursor-not-allowed disabled:opacity-40">
-            {bulkBusy ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />} Descartar solo genéricos ({pendingGenericInView.length})
-          </button>
         )}
 
         {section && (

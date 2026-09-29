@@ -43,7 +43,7 @@ export default function CandCard({ c, candKey, status, reviewer, reviewable, onR
   const dim = status === "discarded";
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-[var(--bd)]">
+    <div className={`relative overflow-hidden rounded-xl border ${status === "approved" ? "border-emerald-500/60" : status === "discarded" ? "border-red-500/60" : "border-[var(--bd)]"}`}>
       {/* fondos de acción revelados al deslizar */}
       {reviewable && (
         <>
@@ -58,7 +58,7 @@ export default function CandCard({ c, candKey, status, reviewer, reviewable, onR
 
       {/* cara de la tarjeta */}
       <div
-        className={`relative bg-[var(--bg2)] p-3 ${dim ? "opacity-50" : ""}`}
+        className={`relative bg-[var(--bg2)] px-4 py-3 ${dim ? "opacity-50" : ""}`}
         style={{ transform: `translateX(${dx}px)`, transition: dragging ? "none" : "transform .2s ease", touchAction: "pan-y" }}
         onTouchStart={(e) => onStart(e.touches[0].clientX)}
         onTouchMove={(e) => onMove(e.touches[0].clientX)}
@@ -89,19 +89,22 @@ export default function CandCard({ c, candKey, status, reviewer, reviewable, onR
         </div>
         {c.ai?.summary && <p className="mt-2 text-xs text-[var(--mut)]">{c.ai.summary}</p>}
 
-        {reviewable && (
-          <div className="mt-3 flex gap-2">
-            <button onClick={() => onReview(candKey, status === "approved" ? null : "approved")}
-              className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-1.5 text-sm ${status === "approved" ? "border-emerald-500 bg-emerald-500/20 text-emerald-300" : "border-[var(--bd)] text-[var(--mut)]"}`}>
-              <Check size={15} /> Aprobar
-            </button>
-            <button onClick={() => onReview(candKey, status === "discarded" ? null : "discarded")}
-              className={`flex flex-1 items-center justify-center gap-1 rounded-lg border py-1.5 text-sm ${status === "discarded" ? "border-red-500 bg-red-500/20 text-red-300" : "border-[var(--bd)] text-[var(--mut)]"}`}>
-              <X size={15} /> Descartar
-            </button>
+        {reviewable && status && (
+          <div className="mt-2 flex items-center gap-2 text-[11px]">
+            <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-semibold ${status === "approved" ? "bg-emerald-500/20 text-emerald-300" : "bg-red-500/20 text-red-300"}`}>
+              {status === "approved" ? <Check size={12} /> : <X size={12} />} {status === "approved" ? "Aprobada" : "Descartada"}
+            </span>
+            <span className="text-[var(--mut)]">{reviewer ? `por ${reviewer} · ` : ""}desliza de nuevo para deshacer</span>
           </div>
         )}
-        {reviewable && status && reviewer && <div className="mt-1.5 text-[10px] text-[var(--mut)]">por {reviewer}</div>}
+
+        {/* Pistas de gesto en los bordes: verde = aprobar (→), rojo = descartar (←) */}
+        {reviewable && (
+          <>
+            <span aria-hidden className={`pointer-events-none absolute inset-y-3 left-0 w-1 rounded-r ${status === "approved" ? "bg-emerald-400" : "bg-emerald-500/50"}`} />
+            <span aria-hidden className={`pointer-events-none absolute inset-y-3 right-0 w-1 rounded-l ${status === "discarded" ? "bg-red-400" : "bg-red-500/50"}`} />
+          </>
+        )}
       </div>
     </div>
   );
