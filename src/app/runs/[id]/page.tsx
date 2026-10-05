@@ -6,6 +6,7 @@ import { getReviews } from "@/lib/reviews";
 import { publicImageUrl } from "@/lib/publications";
 import { getCarteraImageUrls } from "@/lib/cartera-images";
 import Results from "@/app/_components/Results";
+import { hydrateReport } from "@/lib/report-hydrate";
 import type { ReportDTO } from "@/lib/dto";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +16,10 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   const db = getDb();
   if (!db) return notFound();
 
-  const [row] = await db<{ payload: ReportDTO; organization_id: number | null }[]>`
-    SELECT payload, organization_id FROM runs WHERE id = ${Number(id)}
+  const [row] = await db<{ payload: ReportDTO; organization_id: number | null; gazette_id: number | null; country_name: string | null }[]>`
+    SELECT r.payload, r.organization_id, r.gazette_id, c.name AS country_name
+    FROM runs r LEFT JOIN countries c ON upper(c.iso2) = upper(r.country)
+    WHERE r.id = ${Number(id)}
   `;
   if (!row) return notFound();
   const session = await getSession();
@@ -24,6 +27,13 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   // Aislamiento: solo el superadmin (o la propia organización) puede ver la corrida.
   if (session.role !== "superadmin" && Number(row.organization_id) !== session.organizationId) return notFound();
   const { statuses, reviewers } = await getReviews(Number(id));
+  // Completa la foto del barrido con los datos vigentes de gaceta y cartera
+  // (vista + exports PDF/Excel). Si falla, se usa el payload tal cual.
+  const dto = await hydrateReport(row.payload, row.gazette_id, row.organization_id).catch((e) => {
+    console.error("[vsion] no se pudo completar el reporte:", e);
+    return row.payload;
+  });
+  if (row.country_name) dto.meta = { ...dto.meta, countryName: row.country_name };
   const canEdit = true; // workspace compartido: cualquier usuario puede revisar/exportar
 
   // Imágenes de las publicaciones de esta corrida (id de imagen SIC → URL pública).
@@ -44,7 +54,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
 
   // Imágenes de la cartera del cliente (por código) para las marcas de esta corrida.
   const codes = new Set<string>();
-  for (const g of row.payload.groups ?? []) for (const c of g.candidates ?? []) if (c.clientCode) codes.add(c.clientCode);
+  for (const g of dto.groups ?? []) for (const c of g.candidates ?? []) if (c.clientCode) codes.add(c.clientCode);
   const clientImages = await getCarteraImageUrls(row.organization_id, [...codes]);
 
   return (
@@ -58,7 +68,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
           Ver publicación completa →
         </Link>
       </div>
-      <Results dto={row.payload} runId={Number(id)} reviews={statuses} reviewers={reviewers} canEdit={canEdit} images={images} clientImages={clientImages} currentUser={session.name || session.email} />
+      <Results dto={dto} runId={Number(id)} reviews={statuses} reviewers={reviewers} canEdit={canEdit} images={images} clientImages={clientImages} currentUser={session.name || session.email} />
     </div>
   );
 }

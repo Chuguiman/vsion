@@ -6,7 +6,7 @@ const SESSION_COOKIE = "vsion_session";
 type Role = "superadmin" | "admin" | "user";
 
 const PUBLIC = ["/login", "/register"];
-const SUPERADMIN_ONLY = ["/cartera"]; // "/" se maneja aparte (es la página de subir)
+const SUPERADMIN_ONLY = ["/cartera", "/publicaciones"]; // "/" se maneja aparte (es la página de subir)
 const ADMIN_PATHS = ["/admin", "/paises", "/billing"];
 
 async function readRole(req: NextRequest): Promise<Role | null> {

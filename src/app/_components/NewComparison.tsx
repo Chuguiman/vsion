@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { UploadCloud, Loader2, FileJson, Database, Archive } from "lucide-react";
 import {
-  runComparison, runComparisonFromDb, runComparisonFromGazetteAction,
+  runComparison, runComparisonFromGazetteAction,
   carteraInfoAction, listReusableGazettesAction, type RunResult,
 } from "../actions";
 import type { ReusableGazette } from "@/lib/gazettes";
+import { findGazetteAction } from "../gazettes-actions";
+import { readGazetteFile, uploadGazetteDoc } from "./uploadGazette";
 import Results from "./Results";
 import StyledSelect from "./StyledSelect";
 
@@ -62,6 +64,7 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
   const [gazette, setGazette] = useState<File | null>(null);
   const [orgId, setOrgId] = useState<string>(orgs.length === 1 ? String(orgs[0].id) : "");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const [res, setRes] = useState<RunResult | null>(null);
   // superadmin: la cartera se resuelve por la org elegida; los demás usan la suya.
   const [info, setInfo] = useState(carteraInfo);
@@ -90,7 +93,7 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
         if (!alive) return;
         const list = r.gazettes ?? [];
         setGazettes(list); setGazetteId("");
-        if (!list.length) setSource("upload");
+        setSource(list.length ? "reuse" : "upload");
       })
       .catch(() => { if (alive) setGazettes([]); });
     return () => { alive = false; };
@@ -106,7 +109,18 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
         r = await runComparisonFromGazetteAction(Number(gazetteId), oid);
       } else if (hasCartera) {
         if (!gazette) return;
-        r = await runComparisonFromDb(gazette, oid);
+        // El JSON se lee aquí y se guarda por lotes (Vercel limita el body a 4.5 MB);
+        // luego se compara contra la gaceta ya guardada.
+        setProgress("Leyendo gaceta…");
+        const { meta, doc } = await readGazetteFile(gazette);
+        const found = await findGazetteAction(meta.country, meta.number);
+        let gid = found.ok && found.gazette?.pub_count ? found.gazette.id : null;
+        if (gid == null) {
+          gid = await uploadGazetteDoc(meta, doc, (done, total) =>
+            setProgress(`Guardando publicaciones ${done.toLocaleString()} / ${total.toLocaleString()}…`));
+        }
+        setProgress("Comparando con la cartera…");
+        r = await runComparisonFromGazetteAction(gid, oid);
       } else {
         if (!gazette || !client) return;
         r = await runComparison(client, gazette, oid);
@@ -117,7 +131,7 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
     } catch (e) {
       setRes({ ok: false, error: e instanceof Error ? e.message : "Error al procesar" });
     } finally {
-      setBusy(false);
+      setBusy(false); setProgress(null);
     }
   }
 
@@ -165,7 +179,7 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
             <div className="grid gap-2 sm:grid-cols-2">
               <SourceCard active={source === "upload"} onClick={() => setSource("upload")}
                 icon={<FileJson size={16} />} title="Gaceta nueva"
-                desc="Subir el JSON de una gaceta que aún no está en el sistema (p. ej. CO1115.json)." />
+                desc="Subir el JSON de una gaceta que aún no está en el sistema (p. ej. CO1115.json). Queda guardada en Publicaciones." />
               <SourceCard active={source === "reuse"} onClick={() => setSource("reuse")} disabled={gazettes.length === 0}
                 icon={<Archive size={16} />}
                 title={`Gaceta ya cargada${gazettes.length > 0 ? ` (${gazettes.length})` : ""}`}
@@ -183,6 +197,7 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
                     value: String(g.id), label: `${g.country}${g.number} · ${g.pub_count.toLocaleString()} publicaciones${g.date_public ? ` · ${g.date_public}` : ""}`,
                   }))]} />
               )}
+              <Link href="/publicaciones" className="mt-2 inline-block text-xs text-[var(--acc)] hover:underline">Gestionar publicaciones cargadas</Link>
             </div>
           </Step>
         </>
@@ -202,12 +217,15 @@ export default function NewComparison({ carteraInfo, orgs = [], isSuper = false 
       <button onClick={run} disabled={!canRun}
         className="inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-4 py-2 font-medium text-black disabled:opacity-40">
         {busy ? <Loader2 className="animate-spin" size={16} /> : <UploadCloud size={16} />}
-        {busy ? "Procesando..." : runLabel}
+        {busy ? progress ?? "Procesando..." : runLabel}
       </button>
       {needsOrg && <p className="mt-2 text-xs text-[var(--mut)]">Selecciona la organización para habilitar la comparación.</p>}
 
       {res && !res.ok && (
-        <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{res.error}</p>
+        <p className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {res.error}
+          {res.runId && <Link href={`/runs/${res.runId}`} className="ml-2 underline">Ver comparación</Link>}
+        </p>
       )}
 
       {res?.ok && res.dto && (

@@ -108,29 +108,6 @@ export async function runComparison(clientFile: Blob, gazetteFile: Blob, organiz
   return sweepAndSave(parseClientMarks(clientRows), parseGazette(gazetteDoc), gazetteDoc, org as number | null, t0);
 }
 
-/** Compara usando la cartera ya importada en la BD; solo se sube la gaceta. */
-export async function runComparisonFromDb(gazetteFile: Blob, organizationId: number | null = null): Promise<RunResult> {
-  const denied = await requireUploader(); if (denied) return denied;
-  const org = await resolveRunOrg(organizationId);
-  if (org && typeof org === "object") return org;
-  const orgId = org as number | null;
-  const t0 = Date.now();
-  let gazetteDoc: any;
-  try {
-    gazetteDoc = JSON.parse(await gazetteFile.text());
-  } catch {
-    return { ok: false, error: "La gaceta no es JSON válido." };
-  }
-  if (!gazetteDoc?.details) return { ok: false, error: "La gaceta no tiene 'details'. ¿Es el JSON correcto?" };
-  const parsed = parseGazette(gazetteDoc);
-  // Aplica el perfil de vigilancia del país de la gaceta para la organización elegida.
-  const marks = await loadMarksFromDb({ orgId, country: parsed.meta.country });
-  if (!marks.length) {
-    return { ok: false, error: "No hay marcas de cartera para vigilar en este país. Revisa el perfil de vigilancia en Países, o importa la cartera." };
-  }
-  return sweepAndSave(marks, parsed, gazetteDoc, orgId, t0);
-}
-
 /** Gacetas ya cargadas que la org puede comparar sin re-subir (país habilitado,
  *  con publicaciones y aún no comparadas por esa org). */
 export async function listReusableGazettesAction(organizationId: number | null = null): Promise<{ ok: boolean; gazettes?: ReusableGazette[]; error?: string }> {

@@ -76,3 +76,71 @@ export async function getGazetteMeta(gazetteId: number): Promise<GazetteMeta | n
     count: g.count ?? 0,
   };
 }
+
+export interface GazetteRow {
+  id: number;
+  country: string;
+  number: string;
+  date_public: string | null;
+  date_due: string | null;
+  language: string | null;
+  count: number;
+  pub_count: number;
+  run_count: number;
+  created_at: string;
+}
+
+/** Todas las gacetas cargadas (CRUD de publicaciones), con nº de publicaciones y corridas. */
+export async function listAllGazettes(): Promise<GazetteRow[]> {
+  const db = getDb();
+  if (!db) return [];
+  return db<GazetteRow[]>`
+    SELECT g.id, g.country, g.number, g.date_public::text AS date_public, g.date_due::text AS date_due,
+           g.language, g.count, g.created_at::text AS created_at,
+           (SELECT count(*)::int FROM publications p WHERE p.gazette_id = g.id) AS pub_count,
+           (SELECT count(*)::int FROM runs r WHERE r.gazette_id = g.id) AS run_count
+    FROM gazettes g
+    ORDER BY g.created_at DESC, g.id DESC`;
+}
+
+export async function getGazetteRow(gazetteId: number): Promise<GazetteRow | null> {
+  const db = getDb();
+  if (!db) return null;
+  const [g] = await db<GazetteRow[]>`
+    SELECT g.id, g.country, g.number, g.date_public::text AS date_public, g.date_due::text AS date_due,
+           g.language, g.count, g.created_at::text AS created_at,
+           (SELECT count(*)::int FROM publications p WHERE p.gazette_id = g.id) AS pub_count,
+           (SELECT count(*)::int FROM runs r WHERE r.gazette_id = g.id) AS run_count
+    FROM gazettes g WHERE g.id = ${gazetteId}`;
+  return g ?? null;
+}
+
+/** Busca una gaceta por país+número (para avisar antes de reemplazarla). */
+export async function findGazette(country: string, number: string): Promise<GazetteRow | null> {
+  const db = getDb();
+  if (!db) return null;
+  const [g] = await db<{ id: number }[]>`SELECT id FROM gazettes WHERE upper(country) = upper(${country}) AND number = ${number}`;
+  return g ? getGazetteRow(g.id) : null;
+}
+
+/** Edita la cabecera de la gaceta. País y número la identifican y no se cambian. */
+export async function updateGazette(
+  gazetteId: number, patch: { datePublic: string | null; dateDue: string | null; language: string | null }
+): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  await db`
+    UPDATE gazettes SET date_public = ${patch.datePublic || null}, date_due = ${patch.dateDue || null},
+      language = ${patch.language || "es"}
+    WHERE id = ${gazetteId}`;
+  // Las corridas guardan copia de las fechas: mantenerlas alineadas.
+  await db`UPDATE runs SET date_public = ${patch.datePublic || null}, date_due = ${patch.dateDue || null} WHERE gazette_id = ${gazetteId}`;
+}
+
+/** Borra la gaceta y sus publicaciones. Las imágenes (mark_images) se conservan. */
+export async function deleteGazette(gazetteId: number): Promise<void> {
+  const db = getDb();
+  if (!db) return;
+  await db`DELETE FROM publications WHERE gazette_id = ${gazetteId}`;
+  await db`DELETE FROM gazettes WHERE id = ${gazetteId}`;
+}

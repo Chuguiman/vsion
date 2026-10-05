@@ -4,6 +4,58 @@ const verdicts: Record<AiVerdict, string> = {
   file_opposition: "Oponerse", monitor_closely: "Vigilar", no_action: "Sin acción",
 };
 
+const join = (xs: number[] | undefined) => (xs ?? []).join(", ");
+const withCountry = (name: string, country?: string) => `${name || ""}${country ? ` (${country})` : ""}`;
+/** País de la gaceta para títulos: nombre si se conoce, si no el código. */
+const countryLabel = (meta: ReportDTO["meta"]) => meta.countryName || meta.country;
+
+/** Datos completos de la publicación (gaceta) para Excel. */
+function pubCols(g: PubDTO) {
+  return {
+    "Marca publicada": g.denom,
+    "Expediente publicación": g.applicationNumber,
+    "Fecha de solicitud": g.applicationDate,
+    "Prioridad": g.priority,
+    "Categoría": g.markCategory ?? "",
+    "Tipo de marca": g.markType,
+    "Estado publicación": g.status ?? "",
+    "Clases publicación": join(g.classes),
+    "Productos/servicios publicación": g.pys,
+    "Solicitante": g.applicant,
+    "País solicitante": g.applicantCountry,
+    "Apoderado publicación": g.representant,
+  };
+}
+
+/** Datos completos de la marca de la cartera para Excel. */
+function clientCols(c: PubDTO["candidates"][number]) {
+  return {
+    "Marca cliente": c.clientDenom,
+    "Código cliente": c.clientCode,
+    "Tipo marca cliente": c.clientMarkType ?? "",
+    "Categoría cliente": c.clientCategory ?? "",
+    "Titular": c.clientHolder,
+    "País titular": c.clientCountry,
+    "Apoderado cliente": c.clientAttorney,
+    "Estado marca": c.clientStatus,
+    "Certificado": c.clientCert ?? "",
+    "País de radicación": c.clientFilingCountry ?? "",
+    "Fecha de radicación": c.clientFiled,
+    "Fecha de registro": c.clientRegister,
+    "Vigencia": c.clientValid,
+    "Clases cliente": join(c.clientClasses),
+    "Productos/servicios cliente": c.clientPys,
+    "Clases en común": join(c.matchingClasses),
+    "Clases relacionadas": join(c.relatedClasses),
+    "Score": c.score,
+  };
+}
+
+/** Anchos de columna: descripciones/análisis anchos, resto según el encabezado. */
+const colWidths = (keys: string[]) => keys.map((k) => ({
+  wch: /Productos\/servicios|Análisis|Razonamiento/.test(k) ? 60 : Math.min(34, Math.max(12, k.length + 4)),
+}));
+
 /** Mantiene separados los avisos, las coincidencias internas y los terceros. */
 export function reportGroups(groups: PubDTO[], relation: "firm" | "own" | "conflict") {
   return groups.map((g) => ({ ...g, candidates: g.candidates.filter((c) => c.relation === relation) }))
@@ -20,7 +72,7 @@ export async function createSectionPdf(groups: PubDTO[], meta: ReportDTO["meta"]
   doc.setFontSize(17);
   doc.text(`vsion | ${title}`, 14, 17);
   doc.setFontSize(10);
-  doc.text(`Gaceta ${meta.country}${meta.number} | Publicación: ${meta.datePublic}`, 14, 25);
+  doc.text(`Gaceta ${meta.country}${meta.number} · ${countryLabel(meta)} | Publicación: ${meta.datePublic}`, 14, 25);
   const publications = [...new Map(selected.map((g) => [g.applicationNumber || g.denom, g])).values()];
   const pairs = selected.flatMap((g) => g.candidates.map((c) => ({ g, c })));
   const description = section === "firm"
@@ -34,11 +86,11 @@ export async function createSectionPdf(groups: PubDTO[], meta: ReportDTO["meta"]
       : [["Marca publicada", "Expediente", "Titular / solicitante", "Apoderado", "Tipo de marca", "Clases Niza"]],
     body: section === "firm"
       ? pairs.map(({ g, c }) => [
-          `${g.denom}\n${g.applicationNumber}`, `${g.applicant}\n${g.representant}`,
+          `${g.denom}\n${g.applicationNumber}`, `${withCountry(g.applicant, g.applicantCountry)}\n${g.representant}`,
           `${c.clientDenom}\n${c.clientCode}`, `${c.clientHolder}\n${c.clientAttorney}`,
           `${g.classes.join(", ") || "-"} / ${c.clientClasses.join(", ") || "-"}`, `${c.score} / 100`,
         ])
-      : publications.map((g) => [g.denom, g.applicationNumber, g.applicant, g.representant, g.markType, g.classes.join(", ") || "-"]),
+      : publications.map((g) => [g.denom, g.applicationNumber, withCountry(g.applicant, g.applicantCountry), g.representant, g.markType, g.classes.join(", ") || "-"]),
     styles: { fontSize: 9, cellPadding: 3, overflow: "linebreak" },
     headStyles: { fillColor: section === "firm" ? [109, 76, 181] : [37, 99, 180] },
     rowPageBreak: "avoid",
@@ -54,31 +106,12 @@ export async function createSectionPdf(groups: PubDTO[], meta: ReportDTO["meta"]
 export function sectionExportRows(groups: PubDTO[], section: "firm" | "own") {
   const selected = reportGroups(groups, section);
   if (section === "firm") {
-    return selected.flatMap((g) => g.candidates.map((c) => ({
-      "Marca publicada": g.denom,
-      "Expediente publicación": g.applicationNumber,
-      "Solicitante": g.applicant,
-      "Apoderado publicación": g.representant,
-      "Clases publicación": g.classes.join(", "),
-      "Productos/servicios publicación": g.pys,
-      "Marca del portafolio": c.clientDenom,
-      "Código": c.clientCode,
-      "Titular": c.clientHolder,
-      "Apoderado portafolio": c.clientAttorney,
-      "Clases portafolio": c.clientClasses.join(", "),
-      "Productos/servicios portafolio": c.clientPys,
-      "Similitud": c.score,
-    })));
+    return selected.flatMap((g) => g.candidates.map((c) => ({ ...pubCols(g), ...clientCols(c) })));
   }
   const pubs = [...new Map(selected.map((g) => [g.applicationNumber || g.denom, g])).values()];
   return pubs.map((g) => ({
-    "Marca publicada": g.denom,
-    "Expediente": g.applicationNumber,
-    "Titular / solicitante": g.applicant,
-    "Apoderado": g.representant,
-    "Tipo de marca": g.markType,
-    "Clases Niza": g.classes.join(", "),
-    "Productos/servicios": g.pys,
+    ...pubCols(g),
+    "Marcas propias relacionadas": g.candidates.map((c) => `${c.clientDenom}${c.clientCode ? ` (${c.clientCode})` : ""}`).join("; "),
   }));
 }
 
@@ -89,12 +122,12 @@ export async function createSectionExcel(groups: PubDTO[], meta: ReportDTO["meta
   const workbook = XLSX.utils.book_new();
   const sheet = XLSX.utils.json_to_sheet(rows);
   // Anchos: descripciones anchas, resto según el largo del encabezado.
-  sheet["!cols"] = Object.keys(rows[0]).map((k) => ({ wch: /Productos\/servicios/.test(k) ? 60 : Math.min(34, Math.max(14, k.length + 4)) }));
+  sheet["!cols"] = colWidths(Object.keys(rows[0]));
   if (sheet["!ref"]) sheet["!autofilter"] = { ref: sheet["!ref"] };
   const name = section === "firm" ? "Tu firma" : "Aviso publicación";
   XLSX.utils.book_append_sheet(workbook, sheet, name);
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
-    ["Gaceta", `${meta.country}${meta.number}`],
+    ["Gaceta", `${meta.country}${meta.number}`], ["País", countryLabel(meta)],
     ["Publicación", meta.datePublic], ["Oposición hasta", meta.dateDue],
     ["Reporte", name], ["Registros", rows.length],
   ]), "Gaceta");
@@ -105,21 +138,12 @@ export async function createSectionExcel(groups: PubDTO[], meta: ReportDTO["meta
 
 export function approvedExportRows(groups: PubDTO[]) {
   return reportGroups(groups, "conflict").flatMap((g) => g.candidates.map((c) => ({
-    "Publicación": g.denom,
-    "Expediente": g.applicationNumber,
-    "Tipo de marca": g.markType,
-    "Clases publicación": g.classes.join(", "),
-    "Solicitante": g.applicant,
-    "Apoderado publicación": g.representant,
-    "Marca cliente": c.clientDenom,
-    "Código cliente": c.clientCode,
-    "Titular": c.clientHolder,
-    "Estado marca": c.clientStatus,
-    "Clases cliente": c.clientClasses.join(", "),
-    "Score": c.score,
+    ...pubCols(g),
+    ...clientCols(c),
     "Recomendación IA": c.ai ? verdicts[c.ai.recommendation] : "Sin análisis",
     "Probabilidad IA (%)": c.ai?.prob ?? "",
     "Análisis IA": c.ai?.summary ?? "",
+    "Razonamiento IA": c.ai?.reasoning ?? "",
     "Revisión": "Aprobada",
   })));
 }
@@ -127,14 +151,15 @@ export function approvedExportRows(groups: PubDTO[]) {
 export async function createApprovedExcel(groups: PubDTO[], meta: ReportDTO["meta"]) {
   const XLSX = await import("xlsx");
   const workbook = XLSX.utils.book_new();
-  const sheet = XLSX.utils.json_to_sheet(approvedExportRows(groups));
-  sheet["!cols"] = [30, 22, 18, 18, 35, 35, 30, 22, 35, 20, 18, 10, 22, 20, 80, 15].map((wch) => ({ wch }));
+  const rows = approvedExportRows(groups);
+  const sheet = XLSX.utils.json_to_sheet(rows);
+  if (rows.length) sheet["!cols"] = colWidths(Object.keys(rows[0]));
   if (sheet["!ref"]) sheet["!autofilter"] = { ref: sheet["!ref"] };
   XLSX.utils.book_append_sheet(workbook, sheet, "Aprobadas");
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
-    ["Gaceta", `${meta.country}${meta.number}`],
+    ["Gaceta", `${meta.country}${meta.number}`], ["País", countryLabel(meta)],
     ["Publicación", meta.datePublic], ["Oposición hasta", meta.dateDue],
-    ["Revisiones aprobadas exportadas", approvedExportRows(groups).length],
+    ["Revisiones aprobadas exportadas", rows.length],
   ]), "Gaceta");
   return new Blob([XLSX.write(workbook, { type: "array", bookType: "xlsx" })], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -148,14 +173,14 @@ export async function createApprovedPdf(groups: PubDTO[], meta: ReportDTO["meta"
   doc.setFontSize(17);
   doc.text("vsion | Revisiones aprobadas", 14, 17);
   doc.setFontSize(10);
-  doc.text(`Gaceta ${meta.country}${meta.number} | Publicación: ${meta.datePublic} | Oposición hasta: ${meta.dateDue}`, 14, 25);
+  doc.text(`Gaceta ${meta.country}${meta.number} · ${countryLabel(meta)} | Publicación: ${meta.datePublic} | Oposición hasta: ${meta.dateDue}`, 14, 25);
   doc.text(`${rows.length} revisiones aprobadas en la vista seleccionada`, 14, 31);
   autoTable(doc, {
     startY: 37, margin: { top: 14, bottom: 17, left: 14, right: 14 },
     head: [["Publicación / expediente", "Marca cliente / titular", "Clases pub. / cliente", "Score", "Recomendación IA", "Análisis IA"]],
     body: rows.map((r) => [
-      `${r.Publicación}\n${r.Expediente}\nSolicitante: ${r.Solicitante}`,
-      `${r["Marca cliente"]}\n${r["Código cliente"]}\n${r.Titular}`,
+      `${r["Marca publicada"]}\n${r["Expediente publicación"]}\nSolicitante: ${withCountry(r.Solicitante, r["País solicitante"])}`,
+      `${r["Marca cliente"]}\n${r["Código cliente"]}\n${withCountry(r.Titular, r["País titular"])}`,
       `${r["Clases publicación"] || "-"} / ${r["Clases cliente"] || "-"}`,
       r.Score,
       `${r["Recomendación IA"]}${r["Probabilidad IA (%)"] === "" ? "" : ` (${r["Probabilidad IA (%)"]}%)`}`,
@@ -241,7 +266,7 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"],
   doc.setFont("helvetica", "bold"); doc.setFontSize(F.title); doc.setTextColor(...TX);
   doc.text("vsion · Vigilancia de marcas", M, 18);
   doc.setFont("helvetica", "normal"); doc.setFontSize(F.small); doc.setTextColor(...MUT);
-  doc.text(`Gaceta ${meta.country}${meta.number} · Colombia · Publicada ${meta.datePublic} · Oposición hasta ${meta.dateDue}`, M, 24);
+  doc.text(`Gaceta ${meta.country}${meta.number} · ${countryLabel(meta)} · Publicada ${meta.datePublic} · Oposición hasta ${meta.dateDue}`, M, 24);
   doc.setDrawColor(...ACC); doc.setLineWidth(0.6); doc.line(M, 27, W - M, 27); doc.setLineWidth(0.2);
 
   // Tiles compactos (misma altura/fuentes)
@@ -317,15 +342,15 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"],
     }
 
     yL = field(xL, yL, "Expediente", g.applicationNumber, colW);
-    yL = field(xL, yL, "Tipo", g.markType, colW);
+    yL = field(xL, yL, "Tipo · Categoría", [g.markType, g.markCategory].filter(Boolean).join(" · "), colW);
     yL = field(xL, yL, "Solicitante", `${g.applicant}${g.applicantCountry ? ` (${g.applicantCountry})` : ""}`, colW);
     yL = field(xL, yL, "Apoderado", g.representant, colW);
-    yL = field(xL, yL, "Fecha de solicitud", g.applicationDate, colW);
+    yL = field(xL, yL, "Fecha de solicitud", [g.applicationDate, g.priority ? `Prioridad ${g.priority}` : ""].filter(Boolean).join(" · "), colW);
     yL = field(xL, yL, "Clases Niza", g.classes.join(", "), colW);
     yL = field(xL, yL, "Productos / servicios", cut(g.pys), colW);
 
     yR = field(xR, yR, "Código", c.clientCode, colW);
-    yR = field(xR, yR, "Estado", c.clientStatus, colW);
+    yR = field(xR, yR, "Estado", [c.clientStatus, c.clientCert ? `Cert. ${c.clientCert}` : ""].filter(Boolean).join(" · "), colW);
     yR = field(xR, yR, "Titular", `${c.clientHolder}${c.clientCountry ? ` (${c.clientCountry})` : ""}`, colW);
     yR = field(xR, yR, "Apoderado", c.clientAttorney, colW);
     yR = field(xR, yR, "Radicación · Vigencia", `${c.clientFiled || "—"} · ${c.clientValid || "—"}`, colW);

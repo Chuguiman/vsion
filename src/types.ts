@@ -42,6 +42,8 @@ export interface GazetteEntry {
 
 export interface GazetteMeta {
   country: string;
+  countryName?: string;   // nombre del país (para reportes); solo en la vista
+
   number: string;
   datePublic: string;
   dateDue: string;
