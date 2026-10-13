@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import DeleteRunButton from "@/app/_components/DeleteRunButton";
 import BarcodeStat, { type Seg } from "@/app/_components/BarcodeStat";
+import HistorialFilters from "@/app/_components/HistorialFilters";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ interface RunRow {
   n_ai_selected: number; n_approved: number; n_discarded: number;
 }
 
+const PAGE_SIZES = [10, 20, 50] as const;
 const pending = (r: RunRow) => Math.max(0, r.n_ai_selected - r.n_approved - r.n_discarded);
 const fmtDate = (d: string | Date | null) => (d ? new Date(d).toLocaleDateString("es") : "—");
 function distribution(r: RunRow): Seg[] {
@@ -28,7 +30,11 @@ function distribution(r: RunRow): Seg[] {
   ];
 }
 
-export default async function Historial() {
+export default async function Historial({
+  searchParams,
+}: {
+  searchParams: Promise<{ org?: string; country?: string; pub?: string; size?: string; page?: string }>;
+}) {
   const db = getDb();
   if (!db) {
     return (
@@ -45,7 +51,49 @@ export default async function Historial() {
   const s = await getSession();
   if (!s) return null;
   const isSuper = s.role === "superadmin";
-  const orgFilter = isSuper ? db`` : db`WHERE r.organization_id = ${s.organizationId}`;
+  const sp = await searchParams;
+  const org = isSuper ? (sp.org ?? "").trim() : "";
+  const country = (sp.country ?? "").trim().toUpperCase();
+  const pub = (sp.pub ?? "").trim();
+  const hasFilters = Boolean(org || country || pub);
+  const size = PAGE_SIZES.find((n) => n === Number(sp.size)) ?? PAGE_SIZES[0];
+  const page = Math.max(Number(sp.page ?? 1) || 1, 1);
+
+  // Base de visibilidad (sin filtros de UI) para poblar las opciones de los selects.
+  const scope = isSuper ? db`TRUE` : db`r.organization_id = ${s.organizationId}`;
+  const conds = [scope];
+  if (org === "none") conds.push(db`r.organization_id IS NULL`);
+  else if (/^\d+$/.test(org)) conds.push(db`r.organization_id = ${Number(org)}`);
+  if (country) conds.push(db`r.country = ${country}`);
+  if (pub) {
+    const like = `%${pub.replace(/[\\%_]/g, "\\$&")}%`;
+    conds.push(db`(r.gazette_number ILIKE ${like} OR concat(r.country, r.gazette_number) ILIKE ${like})`);
+  }
+  const orgFilter = db`WHERE ${conds.reduce((a, c) => db`${a} AND ${c}`)}`;
+
+  const [countries, orgs, [{ total }]] = await Promise.all([
+    db<{ country: string }[]>`SELECT DISTINCT r.country FROM runs r WHERE ${scope} ORDER BY 1`,
+    isSuper
+      ? db<{ id: number | null; name: string | null }[]>`
+          SELECT DISTINCT r.organization_id AS id, o.name
+          FROM runs r LEFT JOIN organizations o ON o.id = r.organization_id
+          ORDER BY o.name NULLS LAST`
+      : Promise.resolve([]),
+    db<{ total: number }[]>`SELECT count(*)::int AS total FROM runs r ${orgFilter}`,
+  ]);
+  const pages = Math.max(Math.ceil(total / size), 1);
+  const cur = Math.min(page, pages);
+  const hrefFor = (p: number) => {
+    const u = new URLSearchParams();
+    if (org) u.set("org", org);
+    if (country) u.set("country", country);
+    if (pub) u.set("pub", pub);
+    if (size !== PAGE_SIZES[0]) u.set("size", String(size));
+    if (p > 1) u.set("page", String(p));
+    const q = u.toString();
+    return `/historial${q ? `?${q}` : ""}`;
+  };
+
   const rows = await db<RunRow[]>`
     SELECT r.id, r.country, r.gazette_number, r.date_public, r.n_candidates, r.n_own, r.created_at,
       o.name AS organization_name,
@@ -70,23 +118,26 @@ export default async function Historial() {
       WHERE c->>'relation' = 'conflict'
     ) counts
     ${orgFilter}
-    ORDER BY r.created_at DESC LIMIT 100`;
+    ORDER BY r.created_at DESC LIMIT ${size} OFFSET ${(cur - 1) * size}`;
 
   return (
     <div>
       <h1 className="mb-1 text-xl font-semibold">Vigilancia</h1>
       <p className="mb-4 text-sm text-[var(--mut)]">Comparaciones ejecutadas y hits/matches encontrados en cada gaceta.</p>
+      <HistorialFilters org={org} country={country} pub={pub} size={size} sizes={PAGE_SIZES}
+        countries={countries.map((c) => c.country)}
+        orgs={isSuper ? orgs.map((o) => ({ value: o.id == null ? "none" : String(o.id), label: o.name ?? "Sin organización" })) : null} />
       {rows.length === 0 ? (
-        <p className="text-sm text-[var(--mut)]">Aún no hay corridas.</p>
+        <p className="text-sm text-[var(--mut)]">{hasFilters ? "Ninguna corrida coincide con los filtros." : "Aún no hay corridas."}</p>
       ) : (
         <>
         {/* Móvil / tablet: tarjetas */}
         <ul className="space-y-3 lg:hidden">
           {rows.map((r) => (
-            <li key={r.id} className="rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-4">
+            <li key={r.id} className="relative rounded-xl border border-[var(--bd)] bg-[var(--bg2)] p-4 transition hover:border-[var(--acc)]/60">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <Link href={`/runs/${r.id}`} className="font-mono text-base font-semibold text-[var(--acc)] hover:underline">
+                  <Link href={`/runs/${r.id}`} className="font-mono text-base font-semibold text-[var(--acc)] hover:underline after:absolute after:inset-0 after:rounded-xl after:content-['']">
                     {r.country}{r.gazette_number}
                   </Link>
                   {isSuper && <div className="truncate text-sm">{r.organization_name ?? "Sin organización"}</div>}
@@ -96,7 +147,7 @@ export default async function Historial() {
                     className="rounded border border-[var(--acc)]/40 bg-[var(--acc)]/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-[var(--acc)]">
                     {r.n_candidates.toLocaleString()} hits
                   </span>
-                  {isSuper && <DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} />}
+                  {isSuper && <span className="relative z-10"><DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} /></span>}
                 </div>
               </div>
               <div className="mt-1 text-xs text-[var(--mut)]">
@@ -145,9 +196,9 @@ export default async function Historial() {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="border-b border-[var(--bd)] last:border-0 hover:bg-white/5">
+                <tr key={r.id} className="relative cursor-pointer border-b border-[var(--bd)] last:border-0 hover:bg-white/5">
                   <td className="px-3 py-2.5">
-                    <Link href={`/runs/${r.id}`} className="font-mono text-[var(--acc)] hover:underline">
+                    <Link href={`/runs/${r.id}`} className="font-mono text-[var(--acc)] hover:underline after:absolute after:inset-0 after:content-['']">
                       {r.country}{r.gazette_number}
                     </Link>
                   </td>
@@ -170,11 +221,20 @@ export default async function Historial() {
                   )}
                   <td className="px-3 py-2.5"><BarcodeStat segments={distribution(r)} compact /></td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-[var(--mut)]">{fmtDate(r.created_at)}</td>
-                  {isSuper && <td className="px-3 py-2.5 text-right"><DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} /></td>}
+                  {isSuper && <td className="relative z-10 px-3 py-2.5 text-right"><DeleteRunButton runId={r.id} label={`${r.country}${r.gazette_number}`} /></td>}
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--mut)]">
+          <span>{(cur - 1) * size + 1}–{Math.min(cur * size, total)} de {total}</span>
+          <div className="flex items-center gap-2">
+            {cur > 1 && <Link href={hrefFor(cur - 1)} className="rounded-lg border border-[var(--bd)] px-3 py-1.5 hover:text-[var(--tx)]">← Anterior</Link>}
+            <span>Página {cur} de {pages}</span>
+            {cur < pages && <Link href={hrefFor(cur + 1)} className="rounded-lg border border-[var(--bd)] px-3 py-1.5 hover:text-[var(--tx)]">Siguiente →</Link>}
+          </div>
         </div>
         </>
       )}
