@@ -12,8 +12,10 @@ import CandCard from "./CandCard";
 import ClassChips from "./ClassChips";
 import ZoomImage from "./ZoomImage";
 import GenericBadge from "./GenericBadge";
+import { AiBadge, AiDetail } from "./AiVerdictView";
 import { genericOnlyOverlap } from "@/generic-words";
 import { phoneticallyIdentical } from "@/phonetic-langs";
+import { AI_VERSION } from "@/ai-verdict";
 
 const C = { red: "#ef4444", amber: "#f59e0b", blue: "#3b82f6", violet: "#8b5cf6", muted: "#71717a", green: "#10b981" };
 
@@ -37,12 +39,6 @@ const REL_CLASS: Record<Relation, string> = {
   firm: "bg-violet-500/15 text-violet-300",
   own: "bg-blue-500/15 text-blue-300",
 };
-const AI_LABEL: Record<AiVerdict, string> = { file_opposition: "Oponerse", monitor_closely: "Vigilar", no_action: "Sin acción" };
-const AI_CLASS: Record<AiVerdict, string> = {
-  file_opposition: "bg-red-500/20 text-red-300",
-  monitor_closely: "bg-amber-500/20 text-amber-300",
-  no_action: "bg-[var(--bd)] text-[var(--mut)]",
-};
 
 function scoreColor(s: number): string {
   const t = Math.max(0, Math.min(1, (s - 55) / 45));
@@ -63,14 +59,11 @@ function RelationCell({ c }: { c: CandDTO }) {
   if (c.relation === "conflict" && c.ai) {
     return (
       <div>
-        <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${AI_CLASS[c.ai.recommendation]}`}>{AI_LABEL[c.ai.recommendation]}</span>
-        <span className="ml-1 text-[11px] text-[var(--mut)]">{c.ai.prob}%</span>
-        {c.ai.summary && (
-          <details open className="mt-1">
-            <summary className="cursor-pointer text-[11px] text-[var(--acc)]">análisis</summary>
-            <p className="mt-1 max-w-xs text-[11px] text-[var(--mut)]">{c.ai.summary}</p>
-          </details>
-        )}
+        <AiBadge ai={c.ai} />
+        <details open className="mt-1">
+          <summary className="cursor-pointer text-[11px] text-[var(--acc)]">análisis</summary>
+          <div className="mt-1"><AiDetail ai={c.ai} compact /></div>
+        </details>
       </div>
     );
   }
@@ -230,9 +223,12 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
   const { meta, stats, groups } = dto;
   const reviewable = !!runId && canEdit;
 
-  const analyzedCount = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai).length, 0);
+  const anyAiCount = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && c.ai).length, 0);
+  // Solo cuentan como analizados los veredictos de la versión vigente (v1 → reanalizar).
+  const analyzedCount = groups.reduce((a, g) => a + g.candidates.filter((c) => c.relation === "conflict" && (c.ai?.v ?? 1) >= AI_VERSION && c.ai).length, 0);
+  const outdatedAi = anyAiCount > 0 && analyzedCount === 0;
   const analysisComplete = stats.conflict > 0 && analyzedCount >= stats.conflict;
-  const showAiKpis = analyzedCount > 0;
+  const showAiKpis = anyAiCount > 0;
   const filter = selectedFilter ?? (showAiKpis ? "ai_selected" : "conflict");
   const nApproved = Object.values(reviews).filter((s) => s === "approved").length;
   const nDiscarded = Object.values(reviews).filter((s) => s === "discarded").length;
@@ -440,10 +436,11 @@ export default function Results({ dto, runId, reviews: initialReviews, reviewers
           ) : (
             <>
               <span className="text-sm text-[var(--mut)]">
-                {analyzedCount > 0 ? `IA parcial: ${analyzedCount}/${stats.conflict}` : `${stats.conflict} conflictos sin analizar`}
+                {outdatedAi ? `Análisis IA anterior (v1, ${anyAiCount} conflictos): sin factores ni motivo de alerta`
+                  : analyzedCount > 0 ? `IA parcial: ${analyzedCount}/${stats.conflict}` : `${stats.conflict} conflictos sin analizar`}
               </span>
               <button onClick={analyze} className="ml-auto inline-flex items-center gap-2 rounded-lg bg-[var(--acc)] px-3 py-1.5 text-sm font-medium text-black">
-                <BrainCircuit size={15} /> {analyzedCount > 0 ? "Continuar IA" : "Analizar con IA"}
+                <BrainCircuit size={15} /> {outdatedAi ? "Reanalizar con IA v2" : analyzedCount > 0 ? "Continuar IA" : "Analizar con IA"}
               </button>
             </>
           )}

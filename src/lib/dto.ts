@@ -8,9 +8,23 @@ export type Relation = "own" | "firm" | "conflict";
 export type AiVerdict = "file_opposition" | "monitor_closely" | "no_action";
 export interface AiResult {
   recommendation: AiVerdict;
+  /** v1: estimación de la IA; v2: índice 0-100 derivado de los factores. */
   prob: number;
   summary: string;
   reasoning: string;
+  // ── v2 (revisión por factores) ──
+  v?: number;
+  level?: "alta" | "media" | "baja";
+  factors?: { phonetic: number; visual: number; conceptual: number; goods: number };
+  shared?: "distinctive" | "weak" | "none";
+  /** Por qué el barrido marcó el par. */
+  why?: string;
+  keyRisk?: string;
+  keyDefense?: string;
+  confidence?: "alta" | "media" | "baja";
+  llmRecommendation?: AiVerdict;
+  weakMatch?: boolean;
+  adjustments?: string[];
 }
 
 export interface CandDTO {

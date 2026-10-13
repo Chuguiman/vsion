@@ -50,6 +50,14 @@ export const GENERIC_WORDS = new Set([
   "transporte", "inversiones", "distribuidor", "drogueria", "droguerias", "lacteos", "empanadas", "asados",
   "hamburguesas", "sabor", "sabores", "innovation", "innovacion", "gestion", "seguridad", "alimentaria",
   "oral", "luxury",
+  // relleno y sectores vistos en oposiciones que el revisor descartó (DONDE, POLITÉCNICO, CLÍNICA…)
+  "donde", "aqui", "todo", "todos", "nuestro", "nuestra", "somos", "your", "our",
+  "escuela", "colegio", "instituto", "politecnico", "universidad", "universitario", "preuniversitario",
+  "formacion", "integral", "integrales", "juridico", "juridica", "juridicos", "abogados", "legal", "sistema",
+  "sistemas", "especialistas", "desarrollo", "talento", "tradicion", "inteligente", "movimiento",
+  "criadero", "veterinaria", "parrilla", "muebles", "audio", "perfumes", "perfumeria", "finanzas",
+  "dotaciones", "tours", "tour", "electro", "electricos", "construyendo", "construye", "panificadora",
+  "inmobiliario", "comercio", "ingenieros", "dulce", "dulces",
 ]);
 
 function tokens(text: string): string[] {

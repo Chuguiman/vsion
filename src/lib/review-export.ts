@@ -57,6 +57,12 @@ const colWidths = (keys: string[]) => keys.map((k) => ({
 }));
 
 /** Mantiene separados los avisos, las coincidencias internas y los terceros. */
+
+/** v2: nivel de riesgo; v1: estimación % de la IA. */
+function aiGrade(ai: { level?: string; prob: number }): string {
+  return ai.level ? `riesgo ${ai.level === "alta" ? "alto" : ai.level === "media" ? "medio" : "bajo"}` : `${ai.prob}%`;
+}
+
 export function reportGroups(groups: PubDTO[], relation: "firm" | "own" | "conflict") {
   return groups.map((g) => ({ ...g, candidates: g.candidates.filter((c) => c.relation === relation) }))
     .filter((g) => g.candidates.length > 0);
@@ -294,7 +300,7 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"],
     head: [["Nº", "Marca publicada", "Marca cliente", "Simil.", "IA"]],
     body: items.map((x, i) => [
       String(i + 1), x.g.denom, x.c.clientDenom, String(x.c.score),
-      x.c.ai ? `${verdicts[x.c.ai.recommendation]} ${x.c.ai.prob}%` : "—",
+      x.c.ai ? `${verdicts[x.c.ai.recommendation]} ${aiGrade(x.c.ai)}` : "—",
     ]),
     styles: { font: "helvetica", fontSize: F.small, cellPadding: 2.2, overflow: "linebreak", textColor: TX },
     headStyles: { fillColor: ACC, fontSize: F.label, fontStyle: "bold" },
@@ -309,7 +315,7 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"],
     doc.setFillColor(...ACC); doc.rect(0, 0, W, 10, "F");
     doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(F.section);
     doc.text(`COMPARACIÓN ${i + 1} / ${items.length}  ·  APROBADA`, M, 6.6);
-    doc.text(`${c.ai ? verdicts[c.ai.recommendation] : "Sin análisis"}${c.ai ? ` · ${c.ai.prob}%` : ""}  ·  Similitud ${c.score}`, W - M, 6.6, { align: "right" });
+    doc.text(`${c.ai ? verdicts[c.ai.recommendation] : "Sin análisis"}${c.ai ? ` · ${aiGrade(c.ai)}` : ""}  ·  Similitud ${c.score}`, W - M, 6.6, { align: "right" });
     doc.setFont("helvetica", "normal");
 
     let y = 18;
@@ -365,11 +371,18 @@ export async function createFichasPdf(groups: PubDTO[], meta: ReportDTO["meta"],
     y = Math.max(
       field(xL, y, "Similitud", `${c.score} / 100`, metricW),
       field(xL + metricW + 4, y, "Recomendación IA", c.ai ? verdicts[c.ai.recommendation] : "—", metricW),
-      field(xL + (metricW + 4) * 2, y, "Estimación IA", c.ai ? `${c.ai.prob} %` : "—", metricW),
+      field(xL + (metricW + 4) * 2, y, c.ai?.level ? "Nivel de riesgo" : "Estimación IA", c.ai ? aiGrade(c.ai) : "—", metricW),
     );
     y = field(M, y, "Clases exactas en común / relacionadas", `${c.matchingClasses.join(", ") || "—"}  /  ${c.relatedClasses.join(", ") || "—"}`, W - M * 2);
     if (c.ai) {
+      if (c.ai.why) y = field(M, y, "Por qué se marcó", c.ai.why, W - M * 2);
+      if (c.ai.factors) {
+        const f = c.ai.factors;
+        y = field(M, y, "Factores (0-3)", `Fonético ${f.phonetic} · Visual ${f.visual} · Conceptual ${f.conceptual} · Productos/servicios ${f.goods}`, W - M * 2);
+      }
       y = field(M, y, "Resumen del agente", c.ai.summary, W - M * 2);
+      if (c.ai.keyRisk) y = field(M, y, "Argumento a favor de oponerse", c.ai.keyRisk, W - M * 2);
+      if (c.ai.keyDefense) y = field(M, y, "Defensa probable del solicitante", c.ai.keyDefense, W - M * 2);
       y = field(M, y, "Razonamiento guardado", c.ai.reasoning, W - M * 2);
     }
     // pie

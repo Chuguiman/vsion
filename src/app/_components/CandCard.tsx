@@ -2,19 +2,16 @@
 
 import { useRef, useState } from "react";
 import { Check, X } from "lucide-react";
-import type { CandDTO, PubDTO, Relation, AiVerdict } from "@/lib/dto";
+import type { CandDTO, PubDTO, Relation } from "@/lib/dto";
 import type { ReviewStatus } from "@/lib/reviews";
 import ClassChips from "./ClassChips";
 import ZoomImage from "./ZoomImage";
 import GenericBadge from "./GenericBadge";
+import { AiBadge, AiDetail } from "./AiVerdictView";
 
 const REL_LABEL: Record<Relation, string> = { conflict: "Conflicto", firm: "Tu firma", own: "Tu marca" };
 const REL_CLASS: Record<Relation, string> = {
   conflict: "bg-red-500/15 text-red-300", firm: "bg-violet-500/15 text-violet-300", own: "bg-blue-500/15 text-blue-300",
-};
-const AI_LABEL: Record<AiVerdict, string> = { file_opposition: "Oponerse", monitor_closely: "Vigilar", no_action: "Sin acción" };
-const AI_CLASS: Record<AiVerdict, string> = {
-  file_opposition: "bg-red-500/20 text-red-300", monitor_closely: "bg-amber-500/20 text-amber-300", no_action: "bg-[var(--bd)] text-[var(--mut)]",
 };
 function scoreColor(s: number) { const t = Math.max(0, Math.min(1, (s - 55) / 45)); return `hsl(${210 - 210 * t}, 78%, 58%)`; }
 
@@ -81,13 +78,13 @@ export default function CandCard({ c, candKey, status, reviewer, reviewable, onR
 
         <div className="mt-2 flex flex-wrap items-start gap-2">
           {kind === "ai" && c.ai
-            ? <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${AI_CLASS[c.ai.recommendation]}`}>{AI_LABEL[c.ai.recommendation]} · {c.ai.prob}%</span>
+            ? <AiBadge ai={c.ai} />
             : <span className={`rounded px-2 py-0.5 text-[11px] font-semibold ${REL_CLASS[c.relation]}`}>{REL_LABEL[c.relation]}</span>}
           {c.clientClasses.length > 0 && (
             <ClassChips classes={c.clientClasses} pys={c.clientPys} match={c.matchingClasses} related={c.relatedClasses} />
           )}
         </div>
-        {c.ai?.summary && <p className="mt-2 text-xs text-[var(--mut)]">{c.ai.summary}</p>}
+        {c.ai && <div className="mt-2"><AiDetail ai={c.ai} /></div>}
 
         {reviewable && status && (
           <div className="mt-2 flex items-center gap-2 text-[11px]">
