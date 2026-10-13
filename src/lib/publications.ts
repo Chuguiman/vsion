@@ -107,7 +107,7 @@ async function queryPublications(
            p.application_number, p.application_date, p.mark_type, p.status, p.image_id,
            mi.bucket AS image_bucket, mi.path AS image_path
     FROM publications p
-    LEFT JOIN mark_images mi ON mi.image_id = p.image_id
+    LEFT JOIN mark_images mi ON mi.image_id IN (p.image_id, p.image_id || '.webp') -- la gaceta puede traer el id sin extensión
     WHERE ${scope} ${filter}
     ORDER BY p.seq LIMIT ${pageSize} OFFSET ${offset}`;
   return { rows, total: n, page, pageSize, pages: Math.max(1, Math.ceil(n / pageSize)) };

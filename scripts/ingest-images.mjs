@@ -77,7 +77,7 @@ async function uploadOne(file) {
     process.stdout.write(`\r${done}/${files.length} (${err} errores)`);
   }
   console.log(`\nListo. ${done} subidas, ${err} errores.`);
-  const linked = await sql`SELECT count(*)::int n FROM publications p JOIN mark_images mi ON mi.image_id = p.image_id`;
+  const linked = await sql`SELECT count(*)::int n FROM publications p JOIN mark_images mi ON mi.image_id IN (p.image_id, p.image_id || '.webp')`;
   console.log(`Publicaciones con imagen vinculada: ${linked[0].n}`);
   await sql.end({ timeout: 5 });
 })().catch((e) => { console.error(e); process.exit(1); });

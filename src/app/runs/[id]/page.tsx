@@ -42,7 +42,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
     FROM runs r
     JOIN publications p ON (r.gazette_id IS NOT NULL AND p.gazette_id = r.gazette_id)
                         OR (r.gazette_id IS NULL AND p.run_id = r.id)
-    JOIN mark_images mi ON mi.image_id = p.image_id
+    JOIN mark_images mi ON mi.image_id IN (p.image_id, p.image_id || '.webp') -- id con o sin extensión
     WHERE r.id = ${Number(id)} AND p.image_id IS NOT NULL AND p.image_id <> ''`;
   // El payload puede traer el id con o sin extensión → se normaliza para casar.
   const normId = (s: string) => s.replace(/\.(webp|png|jpe?g)$/i, "");
